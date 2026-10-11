@@ -17,7 +17,9 @@ if (!JWT_SECRET) { console.error("JWT_SECRET is not set. Add it in your host's e
 const PF_SANDBOX = process.env.PAYFAST_SANDBOX !== "false";
 const PF_MERCHANT_ID = process.env.PAYFAST_MERCHANT_ID || (PF_SANDBOX ? "10000100" : "");
 const PF_MERCHANT_KEY = process.env.PAYFAST_MERCHANT_KEY || (PF_SANDBOX ? "46f0cd694581a" : "");
-const PF_PASSPHRASE = process.env.PAYFAST_PASSPHRASE || (PF_SANDBOX && !process.env.PAYFAST_MERCHANT_ID ? "jt7NOE43FZPn" : "");
+// Set PAYFAST_PASSPHRASE=none if your PayFast account has no passphrase.
+const PF_PASS_RAW = (process.env.PAYFAST_PASSPHRASE || "").trim();
+const PF_PASSPHRASE = PF_PASS_RAW.toLowerCase() === "none" ? "" : (PF_PASS_RAW || (PF_SANDBOX && !process.env.PAYFAST_MERCHANT_ID ? "jt7NOE43FZPn" : ""));
 const PF_HOST = PF_SANDBOX ? "https://sandbox.payfast.co.za" : "https://www.payfast.co.za";
 
 // Prices live on the server only, so nobody can change the price in their browser.
