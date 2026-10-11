@@ -1,0 +1,20 @@
+{
+  "name": "workcampus",
+  "version": "1.0.0",
+  "description": "Work@Campus \u2014 University of Limpopo student jobs & opportunity network",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cookie-parser": "^1.4.7",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.2",
+    "jsonwebtoken": "^9.0.2",
+    "pg": "^8.13.1"
+  }
+}
