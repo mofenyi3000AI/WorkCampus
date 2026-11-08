@@ -19,6 +19,10 @@ Judge every suggestion by this question: **does it bring in money, or bring in t
   Public messages and outreach for Work@Campus are signed by ONE of them, never both at once.
   Default for Work@Campus: **Koos Becker, Operations Manager · Work@Campus · WhatsApp 061 585 1542**
   (`CONTACT_NAME` / `CONTACT_ROLE` in server.js).
+- Cold emails (businesses, landlords, sponsors) are signed by Koos Becker or Karien Becker; the owner finds they open doors.
+  Koos: Work@Campus businesses and landlords. Karien: sponsorships, CSI and the BEE Group itself. Never both on one email.
+  Send them from @beegroup.co.za addresses (koos@ / karien@), not from the owner's personal Gmail,
+  because the personal Gmail shows the owner's name.
 - Business WhatsApp/calls: 061 585 1542 (shown in the app as "WhatsApp us"; `CONTACT_WHATSAPP` in server.js).
   The office admin has a laptop and a cellphone.
 
