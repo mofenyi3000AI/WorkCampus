@@ -14,6 +14,11 @@ Judge every suggestion by this question: **does it bring in money, or bring in t
 - Outreach emails go out only under the owner's real name, or from a real person's own account with that person's consent.
   Do not send emails signed as someone else (the owner once asked for "Koos Becker" / "Karien van Niekerk, BEE Group").
 - Do not sign documents for anyone. Prepare them ready to sign.
+- The owner's name must not appear on anything public for Work@Campus. Sign public messages as **"Work@Campus Team"**.
+  The owner asked to use the name "Koos Bekker/Becker". Koos Bekker is a real, famous South African businessman (Naspers),
+  so Claude does not use that name or any invented person's name as the face of the business.
+- Business WhatsApp/calls: 061 585 1542 (shown in the app as "WhatsApp us"; `CONTACT_WHATSAPP` in server.js).
+  The office admin has a laptop and a cellphone.
 
 ## The business behind Work@Campus
 - Work@Campus is run by **Be Everything Energy (Pty) Ltd** (CIPC 2022/451663/07), the BEE Group (beegroup.co.za).

@@ -12,6 +12,9 @@
   const campusName = () => (campuses.find(c => c.slug === campus) || campuses[0]).name;
   const campusSelect = (id) => `<div class="field"><label>Campus</label><select id="${id}">${campuses.map(c => `<option value="${esc(c.slug)}" ${c.slug === campus ? "selected" : ""}>${esc(c.name)}</option>`).join("")}</select></div>`;
   const shareLink = () => location.origin + "/" + campus;
+  // "WhatsApp us" link to the Work@Campus business number, with a ready message.
+  const wa = (text, label = "WhatsApp us") => settings.whatsapp ? `<a href="https://wa.me/${esc(settings.whatsapp)}?text=${encodeURIComponent(text)}" target="_blank" rel="noopener" style="font-weight:700;color:#0F766E">${esc(label)}</a>` : "Message Work@Campus admin";
+  const waNumber = () => settings.whatsapp ? "0" + settings.whatsapp.slice(2).replace(/(\d{2})(\d{3})(\d{4})/, "$1 $2 $3") : "";
   async function share(url, text) {
     if (navigator.share) { try { await navigator.share({ title: "Work@Campus", text, url }); return; } catch { return; } }
     try { await navigator.clipboard.writeText(text + " " + url); toast("Link copied. Paste it in WhatsApp."); } catch { prompt("Copy this link:", url); }
@@ -109,7 +112,7 @@
       <div class="card">
         <h3>Join free</h3>
         <p class="tiny">Your name and student number stay with admin only. Others see "Verified student".</p>
-        <p class="tiny">Forgot your password? Message Work@Campus admin from the email you joined with.</p>
+        <p class="tiny">Forgot your password? ${wa("Hi Work@Campus, I forgot my password. My email is: ", "WhatsApp us")} from your own number and tell us the email you joined with.</p>
         <div class="grid-2">
           <div class="field"><label>Name</label><input id="r-first" /></div>
           <div class="field"><label>Surname</label><input id="r-surname" /></div>
@@ -135,7 +138,8 @@
       </div>
       <div class="card">
         <h3>Business or employer?</h3>
-        <p class="tiny">Shops, landlords, restaurants and companies: post jobs to UL students. Your posts show your business name and go to the top.</p>
+        <p class="tiny">Shops, landlords, restaurants and companies: post jobs to students. Your posts show your business name and go to the top.</p>
+        <p class="tiny">Questions? ${wa("Hi Work@Campus, I'm a business and I'd like to know more about posting on Work@Campus.")} ${settings.whatsapp ? "(" + esc(waNumber()) + ")" : ""}</p>
         <div class="grid-2">
           <div class="field"><label>Your name</label><input id="b-first" /></div>
           <div class="field"><label>Surname</label><input id="b-surname" /></div>
@@ -328,6 +332,7 @@
         <div class="field"><label>Anything else? (optional)</label><textarea id="h-note" maxlength="500"></textarea></div>
         <button class="btn coral" id="btn-plate">Send quietly</button>
       </div>
+      <div class="card"><h3>Need help with something else?</h3><p class="tiny">Problems with the app, payments or another member: ${wa("Hi Work@Campus, I need help with: ")}${settings.whatsapp ? " · " + esc(waNumber()) : ""}</p></div>
       <div class="card"><h3>Your requests</h3><div id="my-plates" class="tiny">Loading...</div></div>`;
   }
 
@@ -425,7 +430,7 @@
 
   function renderPrivacy() {
     return `${header("Privacy policy")}<div class="card">
-      <p><b>Who we are.</b> Work@Campus is a student jobs and support app, run by Be Everything Energy (Pty) Ltd (registration 2022/451663/07), South Africa. ${settings.contact ? `Questions about your information: <b>${esc(settings.contact)}</b>.` : "Questions about your information: contact admin."}</p>
+      <p><b>Who we are.</b> Work@Campus is a student jobs and support app, run by Be Everything Energy (Pty) Ltd (registration 2022/451663/07), South Africa. Questions about your information: ${settings.contact ? `<b>${esc(settings.contact)}</b> or ` : ""}${wa("Hi Work@Campus, I have a question about my personal information.")}${settings.whatsapp ? " (" + esc(waNumber()) + ")" : ""}.</p>
       <p><b>What we collect.</b> Your name, surname, email, password (stored scrambled, never readable), student number, course, year, where you stay and gender. Businesses: business name and phone. Your posts, messages and food bank requests. For verification: a photo of your student card and a selfie.</p>
       <p><b>Why.</b> To run your account, to keep students safe (only verified students can accept jobs and join walks), to stop fake accounts, and to take payments.</p>
       <p><b>Who can see it.</b> Other students only see your first name and "Verified student". Admin sees your full details so they can verify you and keep the app safe. Food bank requests are seen by admin only. We never sell your information.</p>
@@ -448,7 +453,7 @@
   async function render() {
     if (!me && !PUBLIC.includes(view)) view = "login";
     if (["home", "gigs", "walk", "study", "gig"].includes(view)) await loadGigs();
-    if (["help", "admin", "shop", "me", "privacy", "home"].includes(view)) { try { settings = await api("/api/settings"); } catch { settings = {}; } }
+    if (["help", "admin", "shop", "me", "privacy", "home", "login"].includes(view)) { try { settings = await api("/api/settings"); } catch { settings = {}; } }
     if (["market", "item", "admin"].includes(view)) { try { market = await api("/api/market?campus=" + encodeURIComponent(campus)); } catch { market = []; } }
     showWelcome(false);
     Object.keys(views).forEach(k => {
