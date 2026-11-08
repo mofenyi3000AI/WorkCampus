@@ -6,6 +6,16 @@
   let selectedGig = null;
   let market = [];
   let settings = {};
+  // Which campus this phone is looking at. Set by short links like /ul, saved on the phone, and by the account.
+  let campuses = [{ slug: "ul", name: "University of Limpopo", short: "UL" }];
+  let campus = localStorage.getItem("campus") || "ul";
+  const campusName = () => (campuses.find(c => c.slug === campus) || campuses[0]).name;
+  const campusSelect = (id) => `<div class="field"><label>Campus</label><select id="${id}">${campuses.map(c => `<option value="${esc(c.slug)}" ${c.slug === campus ? "selected" : ""}>${esc(c.name)}</option>`).join("")}</select></div>`;
+  const shareLink = () => location.origin + "/" + campus;
+  async function share(url, text) {
+    if (navigator.share) { try { await navigator.share({ title: "Work@Campus", text, url }); return; } catch { return; } }
+    try { await navigator.clipboard.writeText(text + " " + url); toast("Link copied. Paste it in WhatsApp."); } catch { prompt("Copy this link:", url); }
+  }
   let selectedItem = null;
 
   // Stops anyone from sneaking code into a post (every user text goes through this).
@@ -33,11 +43,14 @@
   function go(name) { view = name; render(); window.scrollTo(0, 0); }
 
   function header(title, sub) {
-    return `<div class="topbar"><div class="brand"><img src="/assets/logo.jpg" alt="" /><div>${esc(title)}<small>${esc(sub || "University of Limpopo")}</small></div></div><div class="pill live"><span class="dot"></span>Online</div></div>`;
+    return `<div class="topbar"><div class="brand"><img src="/assets/logo.jpg" alt="" /><div>${esc(title)}<small>${esc(sub || campusName())}</small></div></div><div class="pill live"><span class="dot"></span>Online</div></div>`;
   }
 
-  async function loadMe() { try { me = (await api("/api/me")).user; } catch { me = null; } }
-  async function loadGigs(cat) { try { gigs = await api("/api/gigs" + (cat ? "?cat=" + cat : "")); } catch { gigs = []; } }
+  async function loadMe() {
+    try { me = (await api("/api/me")).user; } catch { me = null; }
+    if (me && me.campus) { campus = me.campus; localStorage.setItem("campus", campus); }
+  }
+  async function loadGigs() { try { gigs = await api("/api/gigs?campus=" + encodeURIComponent(campus)); } catch { gigs = []; } }
 
   const isPaid = () => me && me.plan !== "free";
 
@@ -102,6 +115,7 @@
         </div>
         <div class="field"><label>Email</label><input id="r-email" type="email" autocomplete="email" /></div>
         <div class="field"><label>Password (6+ characters)</label><input id="r-pass" type="password" autocomplete="new-password" /></div>
+        ${campusSelect("r-campus")}
         <div class="field"><label>Student number</label><input id="r-num" inputmode="numeric" /></div>
         <div class="field"><label>Course</label><input id="r-course" /></div>
         <div class="grid-2">
@@ -127,6 +141,7 @@
         </div>
         <div class="field"><label>Business name</label><input id="b-name" maxlength="80" /></div>
         <div class="field"><label>Phone</label><input id="b-phone" type="tel" inputmode="tel" /></div>
+        ${campusSelect("b-campus")}
         <div class="field"><label>Email</label><input id="b-email" type="email" autocomplete="email" /></div>
         <div class="field"><label>Password (6+ characters)</label><input id="b-pass" type="password" autocomplete="new-password" /></div>
         <p class="tiny">By joining you agree to the <a href="#" data-go="terms">House rules</a> and <a href="#" data-go="privacy">Privacy policy</a>.</p>
@@ -348,7 +363,13 @@
         <div class="grid-2">${photoField("v-card", "Student card (front)", "Clear and readable", "environment")}${photoField("v-selfie", "Selfie", "Your face, good light", "user")}</div>
         <button class="btn teal" id="btn-verify">Send for checking</button></div>` : ""}
       ${me.verify_status === "pending" ? `<div class="card"><p class="tiny">Thanks - admin is checking your photos.</p></div>` : ""}
+      ${me.ambassador ? `<div class="card" style="background:#EEF7F5"><h3>Ambassador</h3>
+        <p class="tiny">Share your link. You earn ${esc(me.ambassador.pct)}% of everything the people you invite pay for their first 12 months.</p>
+        <div class="reply" style="word-break:break-all"><b>${esc(me.ambassador.link)}</b></div>
+        <button class="btn sm gold" id="btn-share-amb">Share my link</button>
+        <div class="tiny" style="margin-top:8px">Joined with your link: <b>${esc(me.ambassador.invited)}</b> · Paying now: <b>${esc(me.ambassador.paying)}</b><br/>Earned: <b>R${esc(me.ambassador.earned)}</b> · Paid to you: R${esc(me.ambassador.paid)} · Still owed: <b>R${esc(me.ambassador.owed)}</b></div></div>` : ""}
       <button class="btn gold" data-go="shop">Plans</button>
+      <button class="btn ghost" style="margin-top:8px" id="btn-share">Invite friends to Work@Campus</button>
       <button class="btn ghost" style="margin-top:8px" data-go="terms">House rules</button>
       ${me.is_admin ? `<button class="btn ghost" style="margin-top:8px" data-go="admin">Admin desk</button>` : ""}
       <button class="btn ghost" style="margin-top:8px" data-go="privacy">Privacy policy</button>
@@ -367,6 +388,17 @@
       <div class="card"><h3>Market items to approve</h3><div id="admin-market" class="tiny">Loading...</div></div>
       <div class="card"><h3>Food requests</h3><div id="admin-plates" class="tiny">Loading...</div></div>
       <div class="card"><h3>Payments</h3><div id="admin-pay" class="tiny">Loading...</div></div>
+      <div class="card"><h3>Links to share</h3><p class="tiny">Post these in WhatsApp and Facebook groups. Each opens the app for that campus with a picture preview.</p>
+        ${campuses.map(c => `<div class="reply" style="word-break:break-all"><b>${esc(c.short)}</b>: ${esc(location.origin + "/" + c.slug)}</div>`).join("")}</div>
+      <div class="card"><h3>Team</h3><p class="tiny">Make someone an admin (e.g. office admin) or an ambassador. They must join the app first.</p>
+        <div id="admin-team" class="tiny">Loading...</div>
+        <div class="field"><label>Their email</label><input id="tm-email" type="email" /></div>
+        <div class="field"><label>Make them</label><select id="tm-role"><option value="ambassador">Ambassador (earns ${20}% commission)</option><option value="admin">Admin (full Admin desk access)</option><option value="remove-ambassador">Remove ambassador</option><option value="remove-admin">Remove admin</option></select></div>
+        <button class="btn sm gold" id="btn-team">Save</button></div>
+      <div class="card"><h3>Campuses</h3><div id="admin-campuses" class="tiny">${campuses.map(c => esc(c.name) + " (/" + esc(c.slug) + ")").join("<br/>")}</div>
+        <div class="grid-2"><div class="field"><label>Short link name</label><input id="cp-slug" maxlength="12" placeholder="univen" /></div><div class="field"><label>Short name</label><input id="cp-short" maxlength="12" placeholder="Univen" /></div></div>
+        <div class="field"><label>Full name</label><input id="cp-name" maxlength="80" placeholder="University of Venda" /></div>
+        <button class="btn sm gold" id="btn-campus">Add campus</button></div>
       <div class="card"><h3>Promo codes</h3><p class="tiny">A discount on the first payment only. Example: LAUNCH50 = 50% off the first month.</p>
         <div id="admin-promos" class="tiny">Loading...</div>
         <div class="grid-2"><div class="field"><label>Code</label><input id="pr-code" maxlength="20" placeholder="LAUNCH50" /></div><div class="field"><label>% off</label><input id="pr-pct" type="number" min="1" max="90" value="50" /></div></div>
@@ -385,7 +417,7 @@
 
   function renderPrivacy() {
     return `${header("Privacy policy")}<div class="card">
-      <p><b>Who we are.</b> Work@Campus is a student jobs and support app for University of Limpopo students. ${settings.contact ? `Questions about your information: <b>${esc(settings.contact)}</b>.` : "Questions about your information: contact admin."}</p>
+      <p><b>Who we are.</b> Work@Campus is a student jobs and support app, run by Be Everything Energy (Pty) Ltd (registration 2022/451663/07), South Africa. ${settings.contact ? `Questions about your information: <b>${esc(settings.contact)}</b>.` : "Questions about your information: contact admin."}</p>
       <p><b>What we collect.</b> Your name, surname, email, password (stored scrambled, never readable), student number, course, year, where you stay and gender. Businesses: business name and phone. Your posts, messages and food bank requests. For verification: a photo of your student card and a selfie.</p>
       <p><b>Why.</b> To run your account, to keep students safe (only verified students can accept jobs and join walks), to stop fake accounts, and to take payments.</p>
       <p><b>Who can see it.</b> Other students only see your first name and "Verified student". Admin sees your full details so they can verify you and keep the app safe. Food bank requests are seen by admin only. We never sell your information.</p>
@@ -409,7 +441,7 @@
     if (!me && !PUBLIC.includes(view)) view = "login";
     if (["home", "gigs", "walk", "study", "gig"].includes(view)) await loadGigs();
     if (["help", "admin", "shop", "me", "privacy", "home"].includes(view)) { try { settings = await api("/api/settings"); } catch { settings = {}; } }
-    if (["market", "item", "admin"].includes(view)) { try { market = await api("/api/market"); } catch { market = []; } }
+    if (["market", "item", "admin"].includes(view)) { try { market = await api("/api/market?campus=" + encodeURIComponent(campus)); } catch { market = []; } }
     showWelcome(false);
     Object.keys(views).forEach(k => {
       const el = $("view-" + k);
@@ -443,6 +475,18 @@
           <div style="margin-top:8px">Subscribers: ${st.subs.starter} Poster · ${st.subs.premium} Campus Pro · ${st.subs.business} Business</div>
           <div>Students: ${st.students} (${st.verified} verified) · Businesses: ${st.businesses}</div>`;
       } catch (e) { $("admin-stats").textContent = e.message; }
+    }
+    if (view === "admin" && $("admin-team")) {
+      try {
+        const t = await api("/api/admin/team");
+        $("admin-team").innerHTML = t.map(u => `<div class="reply"><b>${esc(u.name)}</b> · ${esc(u.email)}${u.owner ? " · owner" : ""}${u.admin ? " · admin" : ""}
+          ${u.ambassador ? `<br/>Ambassador ${esc(u.ambassador.code)} · invited ${esc(u.ambassador.invited)} · paying ${esc(u.ambassador.paying)} · earned R${esc(u.ambassador.earned)} · <b>owed R${esc(u.ambassador.owed)}</b>
+          ${u.ambassador.owed > 0 ? `<br/><button class="btn sm teal" data-payout="${u.id}">I paid R${esc(u.ambassador.owed)}</button>` : ""}` : ""}</div>`).join("") || "Just you so far.";
+        document.querySelectorAll("[data-payout]").forEach(b => b.onclick = act(async () => {
+          if (!confirm("Did you pay this amount to the ambassador (e.g. by EFT)?")) return;
+          await api(`/api/admin/team/${b.dataset.payout}/paid`, { method: "POST" }); toast("Recorded"); go("admin");
+        }));
+      } catch (e) { $("admin-team").textContent = e.message; }
     }
     if (view === "admin" && $("admin-promos")) {
       try {
@@ -528,7 +572,7 @@
       await loadMe(); toast("Welcome back"); go("home");
     });
     on("btn-register", async () => {
-      const body = { email: $("r-email").value, password: $("r-pass").value, first_name: $("r-first").value, surname: $("r-surname").value, student_number: $("r-num").value, course: $("r-course").value, year: $("r-year").value, stay: $("r-stay").value, gender: $("r-gender").value };
+      const body = { email: $("r-email").value, password: $("r-pass").value, first_name: $("r-first").value, surname: $("r-surname").value, student_number: $("r-num").value, campus: $("r-campus").value, course: $("r-course").value, year: $("r-year").value, stay: $("r-stay").value, gender: $("r-gender").value };
       await api("/api/auth/register", { method: "POST", body: JSON.stringify(body) });
       await loadMe();
       let sent = false;
@@ -550,10 +594,20 @@
       toast(r.status === "live" ? "Item is live" : "Sent. Admin will approve it soon."); go("market");
     });
     on("btn-register-biz", async () => {
-      const body = { account_type: "business", email: $("b-email").value, password: $("b-pass").value, first_name: $("b-first").value, surname: $("b-surname").value, business_name: $("b-name").value, phone: $("b-phone").value };
+      const body = { account_type: "business", email: $("b-email").value, password: $("b-pass").value, first_name: $("b-first").value, surname: $("b-surname").value, business_name: $("b-name").value, phone: $("b-phone").value, campus: $("b-campus").value };
       await api("/api/auth/register", { method: "POST", body: JSON.stringify(body) });
       await loadMe(); toast("Business account created"); go("shop");
     });
+    on("btn-team", async () => {
+      await api("/api/admin/team", { method: "POST", body: JSON.stringify({ email: $("tm-email").value.trim(), role: $("tm-role").value }) });
+      toast("Saved"); go("admin");
+    });
+    on("btn-campus", async () => {
+      campuses = await api("/api/admin/campuses", { method: "POST", body: JSON.stringify({ slug: $("cp-slug").value, short: $("cp-short").value, name: $("cp-name").value }) });
+      toast("Campus added"); go("admin");
+    });
+    on("btn-share", () => share(shareLink(), `Earn money, find a study partner, walk home safely and get help with food. Join Work@Campus free (${campusName()}):`));
+    on("btn-share-amb", () => share(me.ambassador.link, `Join Work@Campus free: student jobs, safe walks, market and food bank.`));
     on("btn-promo", async () => {
       const plan = $("pr-plan").value;
       await api("/api/admin/promos", { method: "POST", body: JSON.stringify({ code: $("pr-code").value, pct: Number($("pr-pct").value), max: Number($("pr-max").value), plans: plan ? [plan] : [] }) });
@@ -594,7 +648,14 @@
   window.addEventListener("online", () => $("offline-banner").classList.add("hidden"));
 
   (async () => {
+    try { campuses = await api("/api/campuses"); } catch {}
+    const fromLink = document.querySelector('meta[name="wc-campus"]')?.content || location.pathname.split("/")[1];
+    if (fromLink && campuses.some(c => c.slug === fromLink)) { campus = fromLink; localStorage.setItem("campus", campus); }
+    if (!campuses.some(c => c.slug === campus)) campus = campuses[0].slug;
+    if (location.pathname !== "/") history.replaceState(null, "", "/" + location.search);
     await loadMe();
+    const wc = document.getElementById("welcome-campus"); if (wc) wc.textContent = campusName().toUpperCase();
+    document.title = "Work@Campus · " + campusName();
     const paid = new URLSearchParams(location.search).get("paid");
     if (paid !== null) history.replaceState(null, "", "/");
     if (paid === "1") { toast("Thank you! Your plan switches on as soon as PayFast confirms."); go("shop"); }

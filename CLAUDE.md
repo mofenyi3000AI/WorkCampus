@@ -15,6 +15,17 @@ Judge every suggestion by this question: **does it bring in money, or bring in t
   Do not send emails signed as someone else (the owner once asked for "Koos Becker" / "Karien van Niekerk, BEE Group").
 - Do not sign documents for anyone. Prepare them ready to sign.
 
+## The business behind Work@Campus
+- Work@Campus is run by **Be Everything Energy (Pty) Ltd** (CIPC 2022/451663/07), the BEE Group (beegroup.co.za).
+  Its bank account is a Standard Bank MyMoBiz account. Never put bank account numbers in this repo.
+- The owner does NOT want a separate company or a separate PayFast account (too much admin and cost).
+  Work@Campus uses the BEE Group PayFast account. That account has never received a payment, so setting a
+  passphrase on it is low-risk; the beegroup.co.za shop's PayFast plugin must get the same passphrase on the same day.
+- Team: the owner plus **Puleng** (office admin, made admin on the Admin desk). More students later if work grows.
+- The owner will pay for Render Starter (about R130/month) once the first customer pays.
+- The plan is many universities, not just UL. Campuses are added on the Admin desk; each gets a short link (/ul, /univen).
+- Student calendar matters: exams and closing in late November/December; the big chance is the January registration rush.
+
 ## The money today
 - Poster plan R39/month (post paid jobs). Campus Pro R79/month (post jobs and sell on the market).
 - Business plan R499/month: business accounts (no student number), business name on posts, all their job posts featured at the top, can sell.
@@ -23,10 +34,13 @@ Judge every suggestion by this question: **does it bring in money, or bring in t
 - Admin can set a Food bank sponsor ("Plate Fund partner") shown to students.
 - Promo codes (admin desk): % off the first payment, optional plan limit and max uses.
 - Automatic monthly renewal via PayFast subscriptions: built, OFF until `PAYFAST_RECURRING=true` and a passphrase is set.
-  Recommended: a separate PayFast account for Work@Campus, so the beegroup.co.za passphrase is never touched.
+  To switch on: set a passphrase on the BEE Group PayFast account AND in the beegroup.co.za shop plugin (same day).
 - POPIA: privacy page, ID photos deleted after verification, self-service account deletion.
+- Ambassadors earn 20% of what the people they invite pay, for 12 months (`AMBASSADOR_PCT`, `AMBASSADOR_MONTHS` in server.js).
+  Invite links are /r/CODE. Admin records payouts on the Admin desk ("I paid R...").
+- Share links (/, /ul, /univen ...) show a picture preview in WhatsApp and Facebook.
 - Payments go through PayFast. Prices are set in `server.js` (`PLANS`).
-- The owner's other business is beegroup.co.za, which uses the same PayFast account. Never change the PayFast passphrase.
+- beegroup.co.za uses the same PayFast account. Only change its passphrase together with the shop's plugin setting.
 
 ## Rough sums (for honest planning)
 - University of Limpopo has roughly 30,000 students. South Africa has about 1 million university students, plus TVET colleges.
@@ -51,7 +65,9 @@ Judge every suggestion by this question: **does it bring in money, or bring in t
 
 ## Tech facts
 - Node/Express app: `server.js` (API), `store.js` (Neon Postgres or a local file), `public/` (one-page phone app).
-- All data lives in one JSON document (`app_state`). That is fine for thousands of users. Move to proper tables before multi-campus growth.
+- All data lives in one JSON document (`app_state`). That is fine for thousands of users. Move to proper tables before
+  it reaches roughly 20,000 users or several busy campuses.
+- Each user, job and market item has a `campus` (old data without one counts as "ul").
 - Hosting: Render free plan plus a free Neon database (see DEPLOY.md).
 - Live app: https://workcampus.onrender.com (Render service "WorkCampus", deploys automatically from `main`).
   Merging to `main` puts changes online within a few minutes.

@@ -36,7 +36,13 @@ const PLANS = {
   "feature-7d": { amount: 29, days: 7, feature: true, name: "Work@Campus Featured post - 7 days" }
 };
 const SELLER_PLANS = ["premium", "business"];
-const GOAL = 300000; // the owner's monthly income goal in rand (shown on the admin desk)
+const GOAL = 300000;
+const AMBASSADOR_PCT = 20;       // ambassadors earn this % of what the people they invited pay...
+const AMBASSADOR_MONTHS = 12;    // ...for this many months after those people join
+const DEFAULT_CAMPUSES = [{ slug: "ul", name: "University of Limpopo", short: "UL" }];
+const campuses = () => (db.campuses?.length ? db.campuses : DEFAULT_CAMPUSES);
+const campusOf = (slug) => campuses().find(c => c.slug === slug) || null;
+const userCampus = (u) => u?.campus || "ul"; // the owner's monthly income goal in rand (shown on the admin desk)
 const FREE_CATS = ["walk", "study"]; // free members can ask for a walking buddy or study partner
 
 let db;
@@ -55,7 +61,27 @@ function activePlan(u) {
 const app = express();
 app.set("trust proxy", 1);
 app.use(cookieParser());
-app.use(express.static(path.join(__dirname, "public")));
+app.use(express.static(path.join(__dirname, "public"), { index: false }));
+
+// ---------- Share links with WhatsApp / Facebook previews ----------
+// workcampus.onrender.com/ul opens the app for that campus.  /r/CODE is an ambassador's invite link.
+const fs = require("fs");
+const INDEX_HTML = fs.readFileSync(path.join(__dirname, "public", "index.html"), "utf8");
+const escHtml = (v) => String(v ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+function sendIndex(res, campus) {
+  const name = campus ? campus.name : "your campus";
+  const title = `Work@Campus · ${campus ? campus.short || campus.name : "Student jobs"}`;
+  const desc = `Earn money with student jobs, find a study partner, walk home safely, buy and sell, and get a plate of food quietly. Free for ${name} students.`;
+  const tags = `<meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Work@Campus" />
+  <meta property="og:title" content="${escHtml(title)}: jobs, safe walks, market and food bank" />
+  <meta property="og:description" content="${escHtml(desc)}" />
+  <meta property="og:image" content="${BASE_URL}/assets/friends.jpg" />
+  <meta property="og:url" content="${BASE_URL}/${campus ? campus.slug : ""}" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="wc-campus" content="${campus ? campus.slug : ""}" />`;
+  res.set("Cache-Control", "no-cache").type("html").send(INDEX_HTML.replace("</head>", tags + "\n</head>"));
+}
 
 const wrap = fn => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 
@@ -118,8 +144,9 @@ function publicUser(u) {
   return { id: u.id, first_name: u.first_name, year: u.year, stay: u.stay, gender: u.gender, role: u.role, plan: activePlan(u), verified: !!u.verified, is_admin: !!u.is_admin };
 }
 function fullUser(u) {
+  const amb = u.ambassador ? ambassadorSummary(u) : null;
   const ended = u.plan && u.plan !== "free" && activePlan(u) === "free";
-  return { ...publicUser(u), plan_ended: ended ? u.plan : null, sub_status: u.sub_status || null, business_name: u.business_name, phone: u.phone, email: u.email, surname: u.surname, student_number: u.student_number, course: u.course, banned: !!u.banned, plan_until: u.plan_until, verify_status: u.verify_status || "none" };
+  return { ...publicUser(u), campus: userCampus(u), ambassador: amb, plan_ended: ended ? u.plan : null, sub_status: u.sub_status || null, business_name: u.business_name, phone: u.phone, email: u.email, surname: u.surname, student_number: u.student_number, course: u.course, banned: !!u.banned, plan_until: u.plan_until, verify_status: u.verify_status || "none" };
 }
 
 // ---------- Accounts ----------
@@ -138,6 +165,8 @@ app.post("/api/auth/register", wrap(async (req, res) => {
   const user = {
     id: nid(), email, password_hash: bcrypt.hashSync(password, 10), first_name, surname, student_number,
     course: clip(req.body.course, 80), year: clip(req.body.year, 20), stay: clip(req.body.stay, 20), gender: clip(req.body.gender, 20),
+    campus: campusOf(String(req.body.campus || "")) ? String(req.body.campus) : "ul",
+    referred_by: db.users.find(u => u.ambassador && u.ref_code && u.ref_code === String(req.cookies.ref || "").toUpperCase())?.id,
     role: isBiz ? "business" : "student", business_name: isBiz ? business_name : undefined, phone: phone || undefined,
     plan: "free", verified: false, banned: false, is_admin: false, created_at: now()
   };
@@ -196,8 +225,9 @@ function viewerIsAdmin(req) {
 app.get("/api/gigs", (req, res) => {
   const isAdmin = viewerIsAdmin(req);
   const cat = req.query.cat ? String(req.query.cat) : null;
+  const campus = campusOf(String(req.query.campus || "")) ? String(req.query.campus) : "ul";
   const list = db.gigs
-    .filter(g => g.status !== "removed" && (!cat || g.cat === cat))
+    .filter(g => g.status !== "removed" && (!cat || g.cat === cat) && (g.campus || "ul") === campus)
     .map(g => {
       const u = db.users.find(x => x.id === g.poster_id) || {};
       const who = u.is_admin ? "Work@Campus team" : u.role === "business" ? `Business · ${u.business_name || ""}` : u.verified ? `Verified ${u.role === "lecturer" ? "lecturer" : "student"}` : "New member (not verified yet)";
@@ -224,7 +254,7 @@ app.post("/api/gigs", auth, wrap(async (req, res) => {
     if (img && img.owner === req.me.id && !img.private) photo = String(req.body.photo);
   }
   if (cat === "walk" && !req.me.verified && !req.me.is_admin) return res.status(403).json({ error: "For safety, walk requests are for verified students. Send your student card photo under Me." });
-  const gig = { id: nid(), photo, title, detail: clip(req.body.detail, 1000), pay, cat, where_text: clip(req.body.where_text, 100), when_text: clip(req.body.when_text, 100), poster_id: req.me.id, status: "open", created_at: now() };
+  const gig = { id: nid(), photo, title, detail: clip(req.body.detail, 1000), pay, cat, where_text: clip(req.body.where_text, 100), when_text: clip(req.body.when_text, 100), poster_id: req.me.id, campus: userCampus(req.me), status: "open", created_at: now() };
   db.gigs.push(gig); await save();
   res.json({ id: gig.id });
 }));
@@ -327,6 +357,7 @@ app.get("/api/market", (req, res) => {
   let viewer = null;
   try { viewer = db.users.find(u => u.id === jwt.verify(req.cookies.token || "", JWT_SECRET).id) || null; } catch {}
   res.json(db.market
+    .filter(m => (m.campus || "ul") === (campusOf(String(req.query.campus || "")) ? String(req.query.campus) : "ul"))
     .filter(m => m.status === "live" || m.status === "sold" || (viewer && (viewer.is_admin || viewer.id === m.seller_id) && m.status !== "removed"))
     .sort((a, b) => b.id - a.id).map(m => marketView(m, viewer)));
 });
@@ -342,7 +373,7 @@ app.post("/api/market", auth, wrap(async (req, res) => {
     const img = await store.getImage(String(req.body.photo));
     if (img && img.owner === req.me.id && !img.private) photo = String(req.body.photo);
   }
-  const m = { id: nid(), title, description: clip(req.body.description, 1000), price, photo, seller_id: req.me.id,
+  const m = { id: nid(), title, description: clip(req.body.description, 1000), price, photo, seller_id: req.me.id, campus: userCampus(req.me),
     status: req.me.is_admin ? "live" : "pending", created_at: now() };
   db.market.push(m); await save(); res.json({ id: m.id, status: m.status });
 }));
@@ -479,6 +510,11 @@ async function applyPayment(data) {
     user.plan = plan.plan; user.plan_until = start.toISOString();
   }
   db.payments.push({ id: nid(), user_id: user.id, pf_payment_id: data.pf_payment_id, ref, amount: expected, item: m[2], renewal, code: (!renewal && checkout?.code) || undefined, status: "COMPLETE", created_at: now() });
+  const amb = user.referred_by && db.users.find(u => u.id === user.referred_by && u.ambassador);
+  if (amb && Date.now() - new Date(user.created_at) < AMBASSADOR_MONTHS * 31 * 864e5) {
+    db.commissions = db.commissions || [];
+    db.commissions.push({ id: nid(), ambassador_id: amb.id, user_id: user.id, pf_payment_id: data.pf_payment_id, amount: Math.round(expected * AMBASSADOR_PCT) / 100, created_at: now() });
+  }
   await save();
   console.log(`PayFast: user ${user.id} paid for ${m[2]}`);
 }
@@ -500,6 +536,66 @@ app.post("/api/me/stop-renewal", auth, wrap(async (req, res) => {
   req.me.sub_status = "cancelled"; await save();
   res.json({ user: fullUser(req.me) });
 }));
+
+// ---------- Campuses ----------
+app.get("/api/campuses", (req, res) => res.json(campuses()));
+app.post("/api/admin/campuses", auth, adminOnly, wrap(async (req, res) => {
+  const slug = clip(req.body.slug, 12).toLowerCase().replace(/[^a-z0-9]/g, ""), name = clip(req.body.name, 80), short = clip(req.body.short, 12);
+  if (!slug || !name) return res.status(400).json({ error: "Enter a short link name (e.g. univen) and the full name" });
+  if (RESERVED.includes(slug)) return res.status(400).json({ error: "Choose another short name" });
+  db.campuses = campuses().slice();
+  if (db.campuses.some(c => c.slug === slug)) return res.status(400).json({ error: "That campus already exists" });
+  db.campuses.push({ slug, name, short: short || slug.toUpperCase() });
+  await save(); res.json(db.campuses);
+}));
+
+// ---------- Team: extra admins (office admin) and ambassadors ----------
+function ambassadorSummary(u) {
+  const invited = db.users.filter(x => x.referred_by === u.id);
+  const earned = (db.commissions || []).filter(c => c.ambassador_id === u.id).reduce((a, c) => a + c.amount, 0);
+  const paid = (db.payouts || []).filter(p => p.ambassador_id === u.id).reduce((a, p) => a + p.amount, 0);
+  return { code: u.ref_code, link: `${BASE_URL}/r/${u.ref_code}`, invited: invited.length,
+    paying: invited.filter(x => activePlan(x) !== "free").length, earned: Math.round(earned * 100) / 100, paid, owed: Math.round((earned - paid) * 100) / 100, pct: AMBASSADOR_PCT };
+}
+function makeRefCode(u) {
+  const base = String(u.first_name || "AMB").toUpperCase().replace(/[^A-Z]/g, "").slice(0, 8) || "AMB";
+  let code; do { code = base + Math.floor(100 + Math.random() * 900); } while (db.users.some(x => x.ref_code === code));
+  return code;
+}
+app.get("/api/admin/team", auth, adminOnly, (req, res) => {
+  res.json(db.users.filter(u => (u.is_admin || u.ambassador) && !u.deleted_at).map(u => ({
+    id: u.id, name: `${u.first_name} ${u.surname || ""}`.trim(), email: u.email, campus: userCampus(u), owner: !!u.owner,
+    admin: !!u.is_admin, ambassador: u.ambassador ? ambassadorSummary(u) : null })));
+});
+app.post("/api/admin/team", auth, adminOnly, wrap(async (req, res) => {
+  const u = db.users.find(x => x.email === clip(req.body.email, 120).toLowerCase() && !x.deleted_at);
+  if (!u) return res.status(404).json({ error: "No account with that email. Ask them to join first." });
+  const role = String(req.body.role || "");
+  if (u.owner && role !== "ambassador") return res.status(400).json({ error: "The owner account cannot be changed" });
+  if (role === "admin") { u.is_admin = true; u.verified = true; }
+  else if (role === "ambassador") { u.ambassador = true; u.ref_code = u.ref_code || makeRefCode(u); }
+  else if (role === "remove-admin") { if (u.id === req.me.id) return res.status(400).json({ error: "You cannot remove yourself" }); u.is_admin = false; }
+  else if (role === "remove-ambassador") u.ambassador = false;
+  else return res.status(400).json({ error: "Unknown role" });
+  await save(); res.json({ ok: true });
+}));
+// Record that an ambassador's commission was paid out (e.g. by EFT).
+app.post("/api/admin/team/:id/paid", auth, adminOnly, wrap(async (req, res) => {
+  const u = db.users.find(x => x.id === Number(req.params.id) && x.ambassador);
+  if (!u) return res.status(404).json({ error: "Not found" });
+  const owed = ambassadorSummary(u).owed;
+  if (owed <= 0) return res.status(400).json({ error: "Nothing owed" });
+  db.payouts = db.payouts || [];
+  db.payouts.push({ id: nid(), ambassador_id: u.id, amount: owed, by: req.me.id, created_at: now() });
+  await save(); res.json({ ok: true, paid: owed });
+}));
+
+// Invite link: remembers who invited this person for 60 days, then opens their campus.
+app.get("/r/:code", (req, res) => {
+  const amb = db.users.find(u => u.ambassador && u.ref_code === String(req.params.code).toUpperCase());
+  if (amb) res.cookie("ref", amb.ref_code, { httpOnly: true, sameSite: "lax", secure: PROD, maxAge: 60 * 864e5 });
+  sendIndex(res, campusOf(userCampus(amb)) || campuses()[0]);
+});
 
 // ---------- Promo codes (e.g. LAUNCH50 = 50% off the first payment) ----------
 function findPromo(code, any) {
@@ -560,6 +656,14 @@ app.post("/api/admin/settings", auth, adminOnly, wrap(async (req, res) => {
 }));
 app.get("/api/health", (req, res) => res.json({ ok: true }));
 
+const RESERVED = ["api", "r", "assets", "css", "js", "admin"];
+app.get("/", (req, res) => sendIndex(res, null));
+app.get("/:slug", (req, res, next) => {
+  const c = campusOf(String(req.params.slug).toLowerCase());
+  if (!c) return next();
+  sendIndex(res, c);
+});
+
 app.use((err, req, res, next) => {
   console.error(err);
   if (!res.headersSent) res.status(500).json({ error: "Something went wrong. Please try again." });
@@ -568,10 +672,12 @@ app.use((err, req, res, next) => {
 (async () => {
   db = await store.init();
   const adminEmail = (process.env.ADMIN_EMAIL || "admin@ul.ac.za").toLowerCase();
-  let admin = db.users.find(u => u.is_admin);
+  // The owner is the first admin. Extra admins (e.g. office admin) are added on the Admin desk.
+  let admin = db.users.find(u => u.owner) || db.users.find(u => u.is_admin);
+  if (admin) admin.owner = true;
   if (!admin) {
     if (PROD && !process.env.ADMIN_PASSWORD) console.warn("ADMIN_PASSWORD is not set - using a temporary password. Set it in your host settings.");
-    admin = { id: nid(), email: adminEmail, first_name: "Admin", surname: "Desk", role: "admin", is_admin: true, verified: true, plan: "premium", banned: false, created_at: now() };
+    admin = { id: nid(), email: adminEmail, first_name: "Admin", surname: "Desk", role: "admin", is_admin: true, owner: true, verified: true, plan: "premium", banned: false, created_at: now() };
     db.users.push(admin);
   }
   // Setting ADMIN_PASSWORD in the host always resets the admin password - handy if you forget it.
