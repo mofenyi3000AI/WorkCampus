@@ -5,7 +5,7 @@
 const fs = require("fs");
 const path = require("path");
 
-const EMPTY = () => ({ users: [], gigs: [], replies: [], market: [], plates: [], payments: [], settings: {}, nextId: 1 });
+const EMPTY = () => ({ users: [], gigs: [], replies: [], market: [], plates: [], payments: [], settings: {}, promos: [], checkouts: {}, nextId: 1 });
 const DIR = path.join(__dirname, "data");
 const FILE = path.join(DIR, "db.json");
 const IMG_DIR = path.join(DIR, "images");
@@ -84,4 +84,10 @@ async function getImage(id) {
   } catch { return null; }
 }
 
-module.exports = { init, save, saveImage, getImage };
+async function deleteImage(id) {
+  if (!/^[a-f0-9]{24}$/.test(id)) return;
+  if (pool) { await pool.query("DELETE FROM images WHERE id = $1", [id]); return; }
+  for (const ext of [".bin", ".json"]) { try { fs.unlinkSync(path.join(IMG_DIR, id + ext)); } catch {} }
+}
+
+module.exports = { init, save, saveImage, getImage, deleteImage };

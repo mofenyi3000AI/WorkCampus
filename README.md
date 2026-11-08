@@ -25,6 +25,11 @@ University of Limpopo student app: paid gigs, walking buddies, study partners, a
 - **Money card on the Admin desk.** Shows what came in this month, monthly subscriptions, and progress towards R300,000 a month.
 - **Food bank sponsor.** Admin can name a "Plate Fund partner" that students see on the Food bank screen. This is what you offer to sponsors.
 
+- **Automatic monthly renewal (ready, switched off).** PayFast can charge members every month by itself. See PAYFAST-SETUP.md to switch it on safely. Members can stop it under Me.
+- **Renewal reminders.** Members see a reminder 5 days before their plan ends, and a "Renew now" message once it has ended.
+- **Promo codes.** On the Admin desk, create codes like LAUNCH50 (50% off the first payment). You can limit them to one plan and a number of uses.
+- **Privacy (POPIA).** There is a Privacy policy page. Student card photos and selfies are deleted as soon as admin has checked them. Members can delete their own account under Me.
+
 ## Run on a laptop
 ```bash
 npm install

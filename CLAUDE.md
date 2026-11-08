@@ -21,6 +21,10 @@ Judge every suggestion by this question: **does it bring in money, or bring in t
 - Featured post R29 for 7 days (one-off), for anyone's own open job post.
 - Admin desk shows a Money card: income this month, monthly subscriptions, progress bar to R300,000.
 - Admin can set a Food bank sponsor ("Plate Fund partner") shown to students.
+- Promo codes (admin desk): % off the first payment, optional plan limit and max uses.
+- Automatic monthly renewal via PayFast subscriptions: built, OFF until `PAYFAST_RECURRING=true` and a passphrase is set.
+  Recommended: a separate PayFast account for Work@Campus, so the beegroup.co.za passphrase is never touched.
+- POPIA: privacy page, ID photos deleted after verification, self-service account deletion.
 - Payments go through PayFast. Prices are set in `server.js` (`PLANS`).
 - The owner's other business is beegroup.co.za, which uses the same PayFast account. Never change the PayFast passphrase.
 
