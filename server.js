@@ -26,6 +26,9 @@ const PF_HOST = PF_SANDBOX ? "https://sandbox.payfast.co.za" : "https://www.payf
 const PF_RECURRING = process.env.PAYFAST_RECURRING === "true" && !!PF_PASSPHRASE;
 const CONTACT_EMAIL = process.env.CONTACT_EMAIL || process.env.ADMIN_EMAIL || "";
 // Work@Campus business WhatsApp (international format, no +). Shown as "WhatsApp us" buttons.
+// Name shown to members and businesses as their contact person.
+const CONTACT_NAME = process.env.CONTACT_NAME || "Koos Becker";
+const CONTACT_ROLE = process.env.CONTACT_ROLE || "Operations Manager";
 const CONTACT_WHATSAPP = (process.env.CONTACT_WHATSAPP || "27615851542").replace(/\D/g, "");
 
 // Prices live on the server only, so nobody can change the price in their browser.
@@ -670,7 +673,7 @@ app.get("/api/admin/stats", auth, ownerOnly, (req, res) => {
 });
 
 // Food bank sponsor ("Plate Fund partner") shown to students. Admin sets it.
-app.get("/api/settings", (req, res) => res.json({ sponsor: db.settings?.sponsor || null, recurring: PF_RECURRING, contact: CONTACT_EMAIL, whatsapp: CONTACT_WHATSAPP }));
+app.get("/api/settings", (req, res) => res.json({ sponsor: db.settings?.sponsor || null, recurring: PF_RECURRING, contact: CONTACT_EMAIL, whatsapp: CONTACT_WHATSAPP, contact_name: CONTACT_NAME, contact_role: CONTACT_ROLE }));
 app.post("/api/admin/settings", auth, adminOnly, wrap(async (req, res) => {
   const name = clip(req.body.sponsor_name, 80);
   db.settings = { ...(db.settings || {}), sponsor: name ? { name, line: clip(req.body.sponsor_line, 140) } : null };

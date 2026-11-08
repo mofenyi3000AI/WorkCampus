@@ -117,7 +117,11 @@ You will not see these on your Admin desk. That is normal:
 ---
 
 ## How to sign your messages
-When you message members, businesses or groups, sign as **Work@Campus Team**. Do not use your own name or the owner's name.
+Sign messages to members, businesses and groups like this:
+
+**Koos Becker, Operations Manager · Work@Campus · WhatsApp 061 585 1542**
+
+Do not use the owner's name in any message.
 
 ## The 5 golden rules
 1. Private information stays private: ID photos, food requests, names and student numbers.
