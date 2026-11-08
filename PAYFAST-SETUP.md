@@ -62,19 +62,20 @@ It is **off** until you switch it on, because PayFast has two rules:
    and changing its passphrase can break the shop.
 2. **Recurring Billing must be switched on** in PayFast.
 
-## The safe way: a separate PayFast account for Work@Campus
-1. Ask PayFast (support or your account page) to open a **second merchant account** for Work@Campus,
-   or open a new one in the name of the Work@Campus business.
-2. On that account only: **Settings → Developer settings → set a passphrase.** Choose a long one and keep it private.
-3. On that account: switch on **Recurring Billing** (also called Subscriptions) in Settings.
+## How to switch it on with your existing BEE Group PayFast account
+Your PayFast account has not received any payments yet, so this is safe if you do steps 1 and 2 on the same day.
+
+1. **PayFast:** log in → **Settings → Developer settings** → set a **passphrase**. Choose a long one
+   (e.g. 3 random words and numbers). Keep it private.
+2. **The beegroup.co.za shop:** ask Tayyab (or whoever manages the website) to type the **same passphrase**
+   into the shop's PayFast plugin settings. Otherwise the shop's payments stop working.
+3. **PayFast:** switch on **Recurring Billing** (also called Subscriptions) under Settings.
    If you can't find it, ask PayFast support to switch it on.
-4. In Render → WorkCampus → **Environment**, update:
+4. **Render** → WorkCampus → **Environment**:
 
 | Name | Value |
 |---|---|
-| `PAYFAST_MERCHANT_ID` | the new account's Merchant ID |
-| `PAYFAST_MERCHANT_KEY` | the new account's Merchant Key |
-| `PAYFAST_PASSPHRASE` | the passphrase you set in step 2 |
+| `PAYFAST_PASSPHRASE` | the passphrase from step 1 |
 | `PAYFAST_RECURRING` | `true` |
 
 5. Save. Render restarts the app. The Plans page now says "Plans renew automatically every month".

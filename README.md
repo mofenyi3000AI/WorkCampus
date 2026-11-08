@@ -30,6 +30,11 @@ University of Limpopo student app: paid gigs, walking buddies, study partners, a
 - **Promo codes.** On the Admin desk, create codes like LAUNCH50 (50% off the first payment). You can limit them to one plan and a number of uses.
 - **Privacy (POPIA).** There is a Privacy policy page. Student card photos and selfies are deleted as soon as admin has checked them. Members can delete their own account under Me.
 
+- **More than one university.** Add campuses on the Admin desk. Each gets its own short link (e.g. /ul, /univen), and students only see posts from their own campus.
+- **Office admin.** On the Admin desk → Team, make Puleng (or anyone with an account) an admin.
+- **Ambassadors.** Make a student an ambassador on the Admin desk. They get an invite link and earn 20% of what the people they invite pay, for 12 months. You record payouts on the Admin desk.
+- **Share links with previews.** workcampus.onrender.com/ul shows a picture and description when posted in WhatsApp or Facebook.
+
 ## Run on a laptop
 ```bash
 npm install
