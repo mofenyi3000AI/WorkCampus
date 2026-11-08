@@ -213,27 +213,57 @@ app.post("/api/gigs/:id/accept", auth, wrap(async (req, res) => {
   if (!g || g.status !== "open") return res.status(400).json({ error: "This is no longer available" });
   if (g.poster_id === req.me.id) return res.status(400).json({ error: "You posted this one" });
   if (!req.me.verified && !req.me.is_admin) return res.status(403).json({ error: "Get verified first: send your student card photo and a selfie under Me." });
-  g.status = "accepted"; g.accepted_by = req.me.id; g.accepted_at = now(); await save();
+  g.status = "accepted"; g.accepted_by = req.me.id; g.accepted_at = now();
+  db.replies.push({ id: nid(), kind: "gig", gig_id: g.id, from_user_id: req.me.id, to_user_id: g.poster_id,
+    body: g.cat === "walk" || g.cat === "study" ? "I'll join you. Let's arrange the details here." : "I've accepted this job. Let's arrange the details here.", created_at: now() });
+  await save();
   res.json({ ok: true });
 }));
 
-app.post("/api/gigs/:id/reply", auth, wrap(async (req, res) => {
-  const g = db.gigs.find(x => x.id === Number(req.params.id));
-  const body = clip(req.body.body, 1000);
-  if (!g) return res.status(404).json({ error: "Not found" });
-  if (!body) return res.status(400).json({ error: "Write a message first" });
-  db.replies.push({ id: nid(), gig_id: g.id, from_user_id: req.me.id, body, created_at: now() });
-  await save(); res.json({ ok: true });
-}));
-
-app.get("/api/gigs/:id/replies", auth, (req, res) => {
-  const g = db.gigs.find(x => x.id === Number(req.params.id));
-  if (!g || (!req.me.is_admin && g.poster_id !== req.me.id)) return res.json([]);
-  res.json(db.replies.filter(r => r.gig_id === g.id).map(r => {
-    const u = db.users.find(x => x.id === r.from_user_id) || {};
-    return { id: r.id, body: r.body, created_at: r.created_at, from: req.me.is_admin ? `${u.first_name} ${u.surname}` : `${u.first_name || "Student"}` };
+// ---------- Private messages (two-way) ----------
+// Each post has one private thread per person who writes to the owner.
+// The owner can answer each person; others only ever see their own thread.
+// Works for job/walk/study posts (gig) and market items (market).
+const KINDS = {
+  gig: { list: () => db.gigs, owner: "poster_id" },
+  market: { list: () => db.market, owner: "seller_id" }
+};
+const nameOf = (id) => db.users.find(u => u.id === id)?.first_name || "Student";
+function msgRoutes(kind) {
+  const K = KINDS[kind];
+  const find = (id) => K.list().find(x => x.id === Number(id) && x.status !== "removed");
+  const isMsgFor = (r, item) => (r.kind || "gig") === kind && r.gig_id === item.id;
+  app.post(`/api/${kind === "gig" ? "gigs" : "market"}/:id/reply`, auth, wrap(async (req, res) => {
+    const item = find(req.params.id);
+    const body = clip(req.body.body, 1000);
+    if (!item) return res.status(404).json({ error: "Not found" });
+    if (!body) return res.status(400).json({ error: "Write a message first" });
+    const owner = item[K.owner];
+    let to = owner;
+    if (req.me.id === owner) {
+      to = Number(req.body.to);
+      const wrote = db.replies.some(r => isMsgFor(r, item) && r.from_user_id === to);
+      if (!to || to === owner || !wrote) return res.status(400).json({ error: "Choose who to answer" });
+    }
+    db.replies.push({ id: nid(), kind, gig_id: item.id, from_user_id: req.me.id, to_user_id: to, body, created_at: now() });
+    await save(); res.json({ ok: true });
   }));
-});
+  app.get(`/api/${kind === "gig" ? "gigs" : "market"}/:id/replies`, auth, (req, res) => {
+    const item = find(req.params.id);
+    if (!item) return res.json([]);
+    const owner = item[K.owner], seeAll = req.me.is_admin || req.me.id === owner;
+    res.json(db.replies.filter(r => isMsgFor(r, item)).map(r => ({ ...r, to_user_id: r.to_user_id || owner }))
+      .filter(r => seeAll || r.from_user_id === req.me.id || r.to_user_id === req.me.id)
+      .map(r => {
+        const other = r.from_user_id === owner ? r.to_user_id : r.from_user_id; // the non-owner in this thread
+        const u = db.users.find(x => x.id === r.from_user_id) || {};
+        return { id: r.id, body: r.body, created_at: r.created_at, mine: r.from_user_id === req.me.id, thread: other, thread_name: nameOf(other),
+          from: req.me.is_admin ? `${u.first_name || ""} ${u.surname || ""}`.trim() : (u.first_name || "Student") };
+      }));
+  });
+}
+msgRoutes("gig");
+msgRoutes("market");
 
 app.post("/api/admin/gigs/:id/remove", auth, adminOnly, wrap(async (req, res) => {
   const g = db.gigs.find(x => x.id === Number(req.params.id));
@@ -264,21 +294,49 @@ app.post("/api/admin/plates/:id/done", auth, adminOnly, wrap(async (req, res) =>
   res.json({ ok: true });
 }));
 
-// ---------- Market ----------
-app.get("/api/market", (req, res) => res.json(db.market.filter(m => m.status === "live")));
+// ---------- Market (Campus Pro sellers; admin approves each item) ----------
+function marketView(m, viewer) {
+  const u = db.users.find(x => x.id === m.seller_id) || {};
+  const who = u.is_admin ? "Work@Campus team" : u.verified ? "Verified student" : "New member (not verified yet)";
+  return { id: m.id, title: m.title, description: m.description, price: m.price, photo: m.photo || null, status: m.status, created_at: m.created_at,
+    seller_id: m.seller_id, mine: !!viewer && viewer.id === m.seller_id,
+    public_label: viewer?.is_admin ? `${u.first_name || ""} ${u.surname || ""}`.trim() : `${who}${u.stay ? " · " + u.stay : ""}` };
+}
+app.get("/api/market", (req, res) => {
+  let viewer = null;
+  try { viewer = db.users.find(u => u.id === jwt.verify(req.cookies.token || "", JWT_SECRET).id) || null; } catch {}
+  res.json(db.market
+    .filter(m => m.status === "live" || m.status === "sold" || (viewer && (viewer.is_admin || viewer.id === m.seller_id) && m.status !== "removed"))
+    .sort((a, b) => b.id - a.id).map(m => marketView(m, viewer)));
+});
 
 app.post("/api/market", auth, wrap(async (req, res) => {
-  if (activePlan(req.me) === "free") return res.status(403).json({ error: "Subscribe to sell" });
+  if (activePlan(req.me) !== "premium") return res.status(403).json({ error: "Selling is part of Campus Pro (R79)" });
   const title = clip(req.body.title, 100);
   if (!title) return res.status(400).json({ error: "Add a title" });
-  const m = { id: nid(), title, description: clip(req.body.description, 1000), price: Math.max(0, Number(req.body.price) || 0), seller_id: req.me.id, status: "pending", created_at: now() };
-  db.market.push(m); await save(); res.json({ id: m.id });
+  const price = Math.round(Number(req.body.price));
+  if (!(price >= 1 && price <= 100000)) return res.status(400).json({ error: "Enter the price in rand" });
+  let photo = null;
+  if (req.body.photo) {
+    const img = await store.getImage(String(req.body.photo));
+    if (img && img.owner === req.me.id && !img.private) photo = String(req.body.photo);
+  }
+  const m = { id: nid(), title, description: clip(req.body.description, 1000), price, photo, seller_id: req.me.id,
+    status: req.me.is_admin ? "live" : "pending", created_at: now() };
+  db.market.push(m); await save(); res.json({ id: m.id, status: m.status });
 }));
 
-app.post("/api/admin/market/:id/approve", auth, adminOnly, wrap(async (req, res) => {
+app.post("/api/market/:id/sold", auth, wrap(async (req, res) => {
   const m = db.market.find(x => x.id === Number(req.params.id));
-  if (m) { m.status = "live"; await save(); }
-  res.json({ ok: true });
+  if (!m || (m.seller_id !== req.me.id && !req.me.is_admin)) return res.status(404).json({ error: "Not found" });
+  m.status = "sold"; await save(); res.json({ ok: true });
+}));
+
+app.post("/api/admin/market/:id/:action", auth, adminOnly, wrap(async (req, res) => {
+  const m = db.market.find(x => x.id === Number(req.params.id));
+  const to = { approve: "live", remove: "removed" }[req.params.action];
+  if (!m || !to) return res.status(404).json({ error: "Not found" });
+  m.status = to; await save(); res.json({ ok: true });
 }));
 
 // ---------- PayFast ----------

@@ -16,6 +16,10 @@ University of Limpopo student app: paid gigs, walking buddies, study partners, a
 - **Admin desk** shows food requests (with a "Mark helped" button) and payments. Admin can remove bad posts.
 - The admin password is no longer printed in the logs. Changing `ADMIN_PASSWORD` in the host resets it.
 
+## What was fixed (Nov 2026)
+- **Students can now talk both ways.** Before, a student could message a job poster, but the poster could not reply. So no job could actually be arranged. Now each post has a private chat with each student, and accepting a job opens the chat automatically.
+- **The market now exists.** Campus Pro (R79) was sold as "sell on the campus market", but there was no market screen. There is now a Market screen (on the Home page) where Campus Pro members can sell, any student can buy and message the seller, and admin approves each item.
+
 ## Run on a laptop
 ```bash
 npm install

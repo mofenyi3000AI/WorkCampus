@@ -4,6 +4,8 @@
   let view = "home";
   let gigs = [];
   let selectedGig = null;
+  let market = [];
+  let selectedItem = null;
 
   // Stops anyone from sneaking code into a post (every user text goes through this).
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -120,7 +122,7 @@
         <button class="cat walk" data-go="walk"><b>Walk together</b><span>Library or home</span></button>
         <button class="cat study" data-go="study"><b>Study help</b><span>Find a partner</span></button>
         <button class="cat plate" data-go="help"><b>Food bank</b><span>Quiet plate</span></button>
-        <button class="cat move" data-go="gigs"><b>Move & bakkie</b><span>Boxes, lifts</span></button>
+        <button class="cat move" data-go="market"><b>Market</b><span>Buy from students</span></button>
         <button class="cat meet" data-go="shop"><b>Plans</b><span>Subscribe to post</span></button>
       </div>
       ${open.slice(0, 4).map(gigCard).join("")}
@@ -163,8 +165,7 @@
         <p class="meta">${placeTime(g)}</p>
         <p class="meta">${esc(g.public_label)} · <span class="status">${esc(g.status)}</span></p>
         ${g.status === "open" && me && !mine ? `<button class="btn gold" id="btn-accept">${g.cat === "walk" || g.cat === "study" ? "I'll join" : "Accept this job"}</button>` : ""}
-        ${me && !mine ? `<div class="field" style="margin-top:12px"><label>Private message to the poster</label><textarea id="reply-body" placeholder="Hi, I can help..."></textarea></div><button class="btn ghost" id="btn-reply">Send privately</button>` : ""}
-        ${me && (me.is_admin || mine) ? `<h3 style="margin-top:14px">Messages</h3><div id="replies" class="tiny">Loading...</div>` : ""}
+        ${me ? `<h3 style="margin-top:14px">${mine ? "Messages from students" : "Private chat with the poster"}</h3><div id="threads" class="tiny">Loading...</div>` : ""}
         ${me && me.is_admin ? `<button class="btn danger" style="margin-top:10px" id="btn-remove">Remove post</button>` : ""}
         ${!me ? `<p class="tiny">Log in to accept or reply.</p>` : ""}
       </div>
@@ -192,6 +193,83 @@
       </div>`;
   }
 
+  // ---- Market ----
+  function itemCard(m) {
+    return `<article class="card tap" data-open-item="${m.id}">
+      ${m.photo ? `<img src="/api/img/${esc(m.photo)}" alt="" loading="lazy" style="width:100%;max-height:170px;object-fit:cover;border-radius:14px;margin-bottom:10px" />` : ""}
+      <div class="between"><span class="tag ${m.status === "live" ? "teal" : "muted"}">${m.status === "live" ? "For sale" : esc(m.status === "pending" ? "Waiting for admin" : m.status)}</span><div class="price">R${esc(m.price)}</div></div>
+      <h3>${esc(m.title)}</h3>
+      <div class="meta">${esc(m.public_label)}</div>
+    </article>`;
+  }
+  function renderMarket() {
+    const live = market.filter(m => m.status === "live"), mine = market.filter(m => m.mine || (me && me.is_admin && m.status === "pending"));
+    const canSell = me && me.plan === "premium";
+    return `${header("Campus market", "Buy and sell with students")}
+      ${mine.filter(m => m.status === "pending").length ? `<p class="tiny">Waiting for admin: ${mine.filter(m => m.status === "pending").map(m => esc(m.title)).join(", ")}</p>` : ""}
+      ${live.map(itemCard).join("") || `<p class="list-empty">Nothing for sale yet. Textbooks, kettles, fridges, calculators - sell yours with Campus Pro.</p>`}
+      ${market.filter(m => m.status === "sold").slice(0, 3).map(itemCard).join("")}
+      <button class="fab" id="btn-sell-open" aria-label="Sell">+</button>
+      ${!me ? `<p class="tiny">Log in to message a seller.</p>` : !canSell ? `<p class="tiny">Buying is free. Selling is part of Campus Pro (R79 / month).</p>` : ""}`;
+  }
+  function renderItem() {
+    const m = market.find(x => x.id == selectedItem);
+    if (!m) return header("Market") + `<p>Not found.</p><button class="btn ghost" data-go="market">Back</button>`;
+    return `${header("Market")}
+      <div class="card">
+        <div class="between"><span class="tag ${m.status === "live" ? "teal" : "muted"}">${esc(m.status === "live" ? "For sale" : m.status)}</span><div class="price">R${esc(m.price)}</div></div>
+        <h2>${esc(m.title)}</h2>
+        ${m.photo ? `<img src="/api/img/${esc(m.photo)}" alt="" style="width:100%;border-radius:14px;margin:6px 0" />` : ""}
+        <p>${esc(m.description)}</p>
+        <p class="meta">${esc(m.public_label)}</p>
+        ${m.mine && m.status === "live" ? `<button class="btn ghost" id="btn-sold">Mark as sold</button>` : ""}
+        ${me && me.is_admin && m.status === "pending" ? `<div class="btns"><button class="btn sm teal" data-mkt="${m.id}" data-act="approve">Approve</button><button class="btn sm danger" data-mkt="${m.id}" data-act="remove">Remove</button></div>` : ""}
+        ${me && me.is_admin && m.status !== "pending" ? `<button class="btn danger" style="margin-top:10px" data-mkt="${m.id}" data-act="remove">Remove item</button>` : ""}
+        ${me && (m.status === "live" || m.mine) ? `<h3 style="margin-top:14px">${m.mine ? "Messages from buyers" : "Private chat with the seller"}</h3><div id="threads" class="tiny">Loading...</div>` : ""}
+        ${!me ? `<p class="tiny">Log in to message the seller.</p>` : ""}
+        <p class="tiny">Safety: meet in a busy place on campus. Check the item before you pay.</p>
+      </div>
+      <button class="btn ghost" data-go="market">Back</button>`;
+  }
+  function renderSell() {
+    if (!me) return `${header("Sell")}<div class="card"><p>Log in first.</p><button class="btn gold" data-go="login">Log in or join</button></div>`;
+    if (me.plan !== "premium") return `${header("Sell on the market")}<div class="card"><p>Selling is part of Campus Pro. Buying is always free.</p><button class="btn gold" data-go="shop">See plans</button></div>`;
+    return `${header("Sell something")}
+      <div class="card">
+        <div class="field"><label>What are you selling?</label><input id="s-title" maxlength="100" placeholder="e.g. Casio fx-82 calculator" /></div>
+        <div class="field"><label>Details</label><textarea id="s-desc" maxlength="1000" placeholder="Condition, where to collect..."></textarea></div>
+        <div class="field"><label>Price (R)</label><input id="s-price" type="number" min="1" inputmode="numeric" /></div>
+        ${photoField("s-photo", "Photo", "A clear photo sells faster", "environment")}
+        <button class="btn gold" id="btn-sell">Send for approval</button>
+        <p class="tiny">Admin checks each item before it goes live.</p>
+      </div>`;
+  }
+
+  // Private conversations under a post. Owner sees one thread per person and can answer each.
+  async function loadThreads(kind, id, ownerIsMe) {
+    const box = $("threads"); if (!box) return;
+    const base = kind === "gig" ? "/api/gigs/" : "/api/market/";
+    let msgs;
+    try { msgs = await api(base + id + "/replies"); } catch { box.textContent = "Could not load messages."; return; }
+    const threads = {};
+    msgs.forEach(m => (threads[m.thread] = threads[m.thread] || { name: m.thread_name, list: [] }).list.push(m));
+    const bubble = (m) => `<div class="reply" style="${m.mine ? "background:#E6F4F1;margin-left:18%" : "margin-right:18%"}"><b>${m.mine ? "You" : esc(m.from)}</b><br/>${esc(m.body)}</div>`;
+    const input = (to) => `<div class="field" style="margin-top:6px"><textarea data-msg-box="${to}" placeholder="${ownerIsMe ? "Answer privately..." : "Hi, I can help..."}"></textarea></div><button class="btn sm ghost" data-msg-send="${to}">Send privately</button>`;
+    if (me.is_admin && !ownerIsMe) {
+      box.innerHTML = Object.values(threads).map(t => `<div style="margin-bottom:10px"><b>With ${esc(t.name)}</b>${t.list.map(bubble).join("")}</div>`).join("") || "No messages yet.";
+    } else if (ownerIsMe) {
+      box.innerHTML = Object.entries(threads).map(([to, t]) => `<div class="card" style="padding:10px"><b>${esc(t.name)}</b>${t.list.map(bubble).join("")}${input(to)}</div>`).join("") || "No messages yet. When someone writes or accepts, it shows here.";
+    } else {
+      const mineT = Object.values(threads)[0];
+      box.innerHTML = (mineT ? mineT.list.map(bubble).join("") : "") + input("");
+    }
+    box.querySelectorAll("[data-msg-send]").forEach(b => b.onclick = act(async () => {
+      const to = b.dataset.msgSend, ta = box.querySelector(`[data-msg-box="${to}"]`);
+      await api(base + id + "/reply", { method: "POST", body: JSON.stringify({ body: ta.value, to: to ? Number(to) : undefined }) });
+      toast("Sent privately"); loadThreads(kind, id, ownerIsMe);
+    }));
+  }
+
   function renderHelp() {
     if (!me) return `${header("Food bank")}<div class="card"><p>Need a plate? Log in and ask quietly. Only admin sees your name.</p><button class="btn gold" data-go="login">Log in or join</button></div>`;
     return `${header("Food bank", "Private - only admin sees this")}
@@ -209,7 +287,7 @@
     const paid = isPaid();
     return `
       ${header("Plans")}
-      <div class="card"><p>Free = find work, walk and study posts. Paid = post jobs and sell on the market.</p>
+      <div class="card"><p>Free = find work, buy on the market, walk and study posts. Poster = post paid jobs. Campus Pro = post jobs and sell on the market.</p>
       ${paid ? `<p class="tiny">Your plan: <b>${esc(me.plan)}</b>${me.plan_until ? " until " + new Date(me.plan_until).toLocaleDateString("en-ZA") : ""}</p>` : ""}</div>
       <div class="plan"><h3>Poster</h3><div class="amt">R39<span class="tiny"> / month</span></div><ul><li>Post paid jobs</li></ul><button class="btn sm gold" data-buy="poster-1m">Pay R39</button></div>
       <div class="plan hot"><h3>Campus Pro</h3><div class="amt">R79<span class="tiny"> / month</span></div><ul><li>Post paid jobs</li><li>Sell on the campus market</li></ul><button class="btn sm gold" data-buy="pro-1m">Pay R79</button></div>
@@ -241,6 +319,7 @@
     if (!me || !me.is_admin) return header("Admin") + "<p>Admin only.</p>";
     return `${header("Admin desk")}
       <div class="card"><h3>Students to verify</h3><div id="admin-verify" class="tiny">Loading...</div></div>
+      <div class="card"><h3>Market items to approve</h3><div id="admin-market" class="tiny">Loading...</div></div>
       <div class="card"><h3>Food requests</h3><div id="admin-plates" class="tiny">Loading...</div></div>
       <div class="card"><h3>Payments</h3><div id="admin-pay" class="tiny">Loading...</div></div>`;
   }
@@ -249,8 +328,8 @@
     return `${header("House rules")}<div class="card"><p>Names stay with admin. Be honest and kind. Finish the jobs you accept. Meet in public places. No assignment cheating - study help means working together, not doing someone's work. Free members find work and post walk and study requests. Paid members post jobs.</p></div><button class="btn gold" data-go="${me ? "me" : "home"}">Back</button>`;
   }
 
-  const views = { login: renderLogin, home: renderHome, gigs: renderGigs, walk: renderWalk, study: renderStudy, gig: renderGig, post: renderPost, help: renderHelp, shop: renderShop, me: renderMe, admin: renderAdmin, terms: renderTerms };
-  const PUBLIC = ["login", "terms", "home", "gigs", "walk", "study", "gig", "help", "shop", "me"];
+  const views = { login: renderLogin, home: renderHome, gigs: renderGigs, walk: renderWalk, study: renderStudy, gig: renderGig, post: renderPost, help: renderHelp, shop: renderShop, me: renderMe, admin: renderAdmin, terms: renderTerms, market: renderMarket, item: renderItem, sell: renderSell };
+  const PUBLIC = ["login", "terms", "home", "gigs", "walk", "study", "gig", "help", "shop", "me", "market", "item", "sell"];
 
   function showWelcome(yes) {
     $("welcome").classList.toggle("hidden", !yes);
@@ -261,6 +340,7 @@
   async function render() {
     if (!me && !PUBLIC.includes(view)) view = "login";
     if (["home", "gigs", "walk", "study", "gig"].includes(view)) await loadGigs();
+    if (["market", "item", "admin"].includes(view)) { try { market = await api("/api/market"); } catch { market = []; } }
     showWelcome(false);
     Object.keys(views).forEach(k => {
       const el = $("view-" + k);
@@ -274,11 +354,20 @@
   }
 
   async function afterRender() {
-    if (view === "gig" && $("replies")) {
-      try {
-        const r = await api(`/api/gigs/${selectedGig}/replies`);
-        $("replies").innerHTML = r.map(x => `<div class="reply"><b>${esc(x.from)}</b><br/>${esc(x.body)}</div>`).join("") || "No messages yet.";
-      } catch { $("replies").textContent = "Could not load messages."; }
+    if (view === "gig" && me) {
+      const g = gigs.find(x => x.id == selectedGig);
+      if (g) loadThreads("gig", g.id, g.poster_id === me.id);
+    }
+    if (view === "item" && me) {
+      const m = market.find(x => x.id == selectedItem);
+      if (m) loadThreads("market", m.id, m.mine);
+    }
+    if (view === "admin" && $("admin-market")) {
+      const pend = market.filter(m => m.status === "pending");
+      $("admin-market").innerHTML = pend.map(m => `<div class="reply"><b>${esc(m.title)}</b> · R${esc(m.price)} · ${esc(m.public_label)}<br/>${esc(m.description)}
+        ${m.photo ? `<img src="/api/img/${esc(m.photo)}" alt="" style="width:100%;border-radius:10px;margin-top:6px" />` : ""}
+        <div class="btns"><button class="btn sm teal" data-mkt="${m.id}" data-act="approve">Approve</button><button class="btn sm danger" data-mkt="${m.id}" data-act="remove">Remove</button></div></div>`).join("") || "Nothing waiting.";
+      bindMarketAdmin();
     }
     if (view === "help" && $("my-plates")) {
       try {
@@ -303,6 +392,13 @@
         document.querySelectorAll("[data-plate-done]").forEach(b => b.onclick = act(async () => { await api(`/api/admin/plates/${b.getAttribute("data-plate-done")}/done`, { method: "POST" }); toast("Marked as helped"); go("admin"); }));
       } catch (e) { $("admin-plates").textContent = e.message; }
     }
+  }
+
+  function bindMarketAdmin() {
+    document.querySelectorAll("[data-mkt]").forEach(b => b.onclick = act(async () => {
+      await api(`/api/admin/market/${b.dataset.mkt}/${b.dataset.act}`, { method: "POST" });
+      toast(b.dataset.act === "approve" ? "Item is live" : "Removed"); go(view === "item" ? "market" : view);
+    }));
   }
 
   function payfastRedirect(url, params) {
@@ -357,7 +453,15 @@
       await api("/api/gigs", { method: "POST", body: JSON.stringify({ photo, title: $("p-title").value, detail: $("p-detail").value, pay: Number($("p-pay").value), cat: $("p-cat").value, where_text: $("p-where").value, when_text: $("p-when").value }) });
       toast("Posted"); go(postCat || "gigs");
     });
-    on("btn-reply", async () => { await api(`/api/gigs/${selectedGig}/reply`, { method: "POST", body: JSON.stringify({ body: $("reply-body").value }) }); toast("Sent privately"); $("reply-body").value = ""; });
+    document.querySelectorAll("[data-open-item]").forEach(b => b.onclick = () => { selectedItem = b.getAttribute("data-open-item"); go("item"); });
+    on("btn-sell-open", async () => go(me ? "sell" : "login"));
+    on("btn-sell", async () => {
+      const photo = await upload("post", "s-photo");
+      const r = await api("/api/market", { method: "POST", body: JSON.stringify({ title: $("s-title").value, description: $("s-desc").value, price: Number($("s-price").value), photo }) });
+      toast(r.status === "live" ? "Item is live" : "Sent. Admin will approve it soon."); go("market");
+    });
+    on("btn-sold", async () => { await api(`/api/market/${selectedItem}/sold`, { method: "POST" }); toast("Marked as sold"); go("market"); });
+    bindMarketAdmin();
     on("btn-remove", async () => { await api(`/api/admin/gigs/${selectedGig}/remove`, { method: "POST" }); toast("Removed"); go("gigs"); });
     on("btn-plate", async () => { await api("/api/plates", { method: "POST", body: JSON.stringify({ need: $("h-need").value, note: $("h-note").value }) }); toast("Sent quietly. Admin will contact you."); go("help"); });
     on("btn-logout", async () => { await api("/api/auth/logout", { method: "POST" }); me = null; toast("Logged out"); go("home"); });
