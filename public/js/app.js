@@ -74,6 +74,16 @@
     me.verify_status === "pending" ? `<span class="tag sky">Checking your photos</span>` : `<span class="tag coral">Not verified</span>`;
   const placeTime = (g) => [g.where_text, g.when_text].filter(Boolean).map(esc).join(" · ");
 
+  // Reminds members before their plan runs out (unless it renews automatically).
+  function renewBanner() {
+    if (!me || me.is_admin) return "";
+    const date = (d) => new Date(d).toLocaleDateString("en-ZA");
+    if (me.plan_ended) return `<div class="card" style="background:#FFF1E6"><b>Your ${esc(me.plan_ended === "premium" ? "Campus Pro" : me.plan_ended === "business" ? "Business" : "Poster")} plan has ended.</b><p class="tiny">Renew to keep posting jobs${me.plan_ended === "starter" ? "" : " and selling"}.</p><button class="btn sm gold" data-go="shop">Renew now</button></div>`;
+    if (me.plan !== "free" && me.plan_until && me.sub_status !== "active" && new Date(me.plan_until) - Date.now() < 5 * 864e5)
+      return `<div class="card" style="background:#FFF6DB"><b>Your plan ends on ${date(me.plan_until)}.</b><p class="tiny">Renew now so your posts keep working.</p><button class="btn sm gold" data-go="shop">Renew</button></div>`;
+    return "";
+  }
+
   function renderLogin() {
     return `
       ${header("Join or log in", "UL students")}
@@ -105,6 +115,7 @@
           ${photoField("r-card", "Front of student card", "Name and photo must be clear", "environment")}
           ${photoField("r-selfie", "Selfie", "Your face, good light", "user")}
         </div>
+        <p class="tiny">By joining you agree to the <a href="#" data-go="terms">House rules</a> and <a href="#" data-go="privacy">Privacy policy</a>.</p>
         <button class="btn teal" id="btn-register">Create free account</button>
       </div>
       <div class="card">
@@ -118,6 +129,7 @@
         <div class="field"><label>Phone</label><input id="b-phone" type="tel" inputmode="tel" /></div>
         <div class="field"><label>Email</label><input id="b-email" type="email" autocomplete="email" /></div>
         <div class="field"><label>Password (6+ characters)</label><input id="b-pass" type="password" autocomplete="new-password" /></div>
+        <p class="tiny">By joining you agree to the <a href="#" data-go="terms">House rules</a> and <a href="#" data-go="privacy">Privacy policy</a>.</p>
         <button class="btn gold" id="btn-register-biz">Create business account</button>
       </div>`;
   }
@@ -126,6 +138,7 @@
     const open = gigs.filter(g => g.status === "open");
     return `
       ${header("Welcome", me ? me.first_name : "Campus")}
+      ${renewBanner()}
       <div class="hero">
         <h1>Solutions for student life.</h1>
         <p>Earn a little extra. Use the food bank when you need a plate. Build friendships that walk you home.</p>
@@ -307,7 +320,9 @@
     return `
       ${header("Plans")}
       <div class="card"><p>Free = find work, buy on the market, walk and study posts. Poster = post paid jobs. Campus Pro = post jobs and sell on the market.</p>
-      ${paid ? `<p class="tiny">Your plan: <b>${esc(me.plan)}</b>${me.plan_until ? " until " + new Date(me.plan_until).toLocaleDateString("en-ZA") : ""}</p>` : ""}</div>
+      ${paid ? `<p class="tiny">Your plan: <b>${esc(me.plan)}</b>${me.plan_until ? (me.sub_status === "active" ? " · renews automatically on " : " until ") + new Date(me.plan_until).toLocaleDateString("en-ZA") : ""}</p>` : ""}
+      <div class="field" style="margin-top:8px"><label>Promo code (optional)</label><input id="promo" maxlength="20" autocapitalize="characters" placeholder="e.g. LAUNCH50" /></div>
+      ${settings.recurring ? `<p class="tiny">Plans renew automatically every month through PayFast. Stop any time under Me.</p>` : ""}</div>
       <div class="plan"><h3>Poster</h3><div class="amt">R39<span class="tiny"> / month</span></div><ul><li>Post paid jobs</li></ul><button class="btn sm gold" data-buy="poster-1m">Pay R39</button></div>
       <div class="plan hot"><h3>Campus Pro</h3><div class="amt">R79<span class="tiny"> / month</span></div><ul><li>Post paid jobs</li><li>Sell on the campus market</li></ul><button class="btn sm gold" data-buy="pro-1m">Pay R79</button></div>
       <div class="plan"><h3>Business</h3><div class="amt">R499<span class="tiny"> / month</span></div><ul><li>For shops, landlords and employers</li><li>Your business name on every post</li><li>All your job posts featured at the top</li><li>Sell on the campus market</li></ul><button class="btn sm gold" data-buy="biz-1m">Pay R499</button></div>
@@ -323,8 +338,10 @@
         <div class="between"><b>${esc(me.first_name)} ${esc(me.surname)}</b>${me.role === "business" ? `<span class="tag teal">Business</span>` : verifyBadge()}</div>
         ${me.business_name ? `<div class="meta">${esc(me.business_name)}</div>` : ""}
         <div class="meta">${[me.course, me.year, me.stay].filter(Boolean).map(esc).join(" · ")}</div>
-        <div class="tiny">Plan: ${esc(me.plan)}${me.plan_until ? " until " + new Date(me.plan_until).toLocaleDateString("en-ZA") : ""}</div>
+        <div class="tiny">Plan: ${esc(me.plan)}${me.plan_until && me.plan !== "free" ? (me.sub_status === "active" ? " · renews automatically on " : " until ") + new Date(me.plan_until).toLocaleDateString("en-ZA") : ""}</div>
+        ${me.sub_status === "active" ? `<button class="btn sm ghost" style="margin-top:8px" id="btn-stop-renew">Stop automatic renewal</button>` : ""}
       </div>
+      ${renewBanner()}
       ${!me.verified && me.verify_status !== "pending" && !me.is_admin && me.role !== "business" ? `<div class="card">
         <h3>Get verified</h3>
         <p class="tiny">${me.verify_status === "rejected" ? "Your last photos could not be checked. Please send clearer ones." : "Send the front of your student card and a selfie. Only admin sees them."}</p>
@@ -334,7 +351,12 @@
       <button class="btn gold" data-go="shop">Plans</button>
       <button class="btn ghost" style="margin-top:8px" data-go="terms">House rules</button>
       ${me.is_admin ? `<button class="btn ghost" style="margin-top:8px" data-go="admin">Admin desk</button>` : ""}
-      <button class="btn ghost" style="margin-top:8px" id="btn-logout">Log out</button>`;
+      <button class="btn ghost" style="margin-top:8px" data-go="privacy">Privacy policy</button>
+      <button class="btn ghost" style="margin-top:8px" id="btn-logout">Log out</button>
+      ${me.is_admin ? "" : `<details style="margin-top:18px"><summary class="tiny">Delete my account</summary>
+        <div class="card" style="margin-top:8px"><p class="tiny">This removes your name, student number, photos and open posts. It cannot be undone. Paid time left on a plan is lost.</p>
+        <div class="field"><label>Type your password to confirm</label><input id="del-pass" type="password" autocomplete="current-password" /></div>
+        <button class="btn danger" id="btn-delete">Delete my account</button></div></details>`}`;
   }
 
   function renderAdmin() {
@@ -345,6 +367,12 @@
       <div class="card"><h3>Market items to approve</h3><div id="admin-market" class="tiny">Loading...</div></div>
       <div class="card"><h3>Food requests</h3><div id="admin-plates" class="tiny">Loading...</div></div>
       <div class="card"><h3>Payments</h3><div id="admin-pay" class="tiny">Loading...</div></div>
+      <div class="card"><h3>Promo codes</h3><p class="tiny">A discount on the first payment only. Example: LAUNCH50 = 50% off the first month.</p>
+        <div id="admin-promos" class="tiny">Loading...</div>
+        <div class="grid-2"><div class="field"><label>Code</label><input id="pr-code" maxlength="20" placeholder="LAUNCH50" /></div><div class="field"><label>% off</label><input id="pr-pct" type="number" min="1" max="90" value="50" /></div></div>
+        <div class="grid-2"><div class="field"><label>Max uses (0 = no limit)</label><input id="pr-max" type="number" min="0" value="0" /></div>
+        <div class="field"><label>For</label><select id="pr-plan"><option value="">All plans</option><option value="biz-1m">Business only</option><option value="pro-1m">Campus Pro only</option><option value="poster-1m">Poster only</option></select></div></div>
+        <button class="btn sm gold" id="btn-promo">Create code</button></div>
       <div class="card"><h3>Food bank sponsor</h3><p class="tiny">Shown to students on the Food bank screen. Leave the name empty to hide it.</p>
         <div class="field"><label>Sponsor name</label><input id="sp-name" maxlength="80" value="${esc(settings.sponsor?.name || "")}" /></div>
         <div class="field"><label>Short line (optional)</label><input id="sp-line" maxlength="140" value="${esc(settings.sponsor?.line || "")}" placeholder="e.g. Feeding UL students every month" /></div>
@@ -355,8 +383,21 @@
     return `${header("House rules")}<div class="card"><p>Names stay with admin. Be honest and kind. Finish the jobs you accept. Meet in public places. No assignment cheating - study help means working together, not doing someone's work. Free members find work and post walk and study requests. Paid members post jobs.</p></div><button class="btn gold" data-go="${me ? "me" : "home"}">Back</button>`;
   }
 
-  const views = { login: renderLogin, home: renderHome, gigs: renderGigs, walk: renderWalk, study: renderStudy, gig: renderGig, post: renderPost, help: renderHelp, shop: renderShop, me: renderMe, admin: renderAdmin, terms: renderTerms, market: renderMarket, item: renderItem, sell: renderSell };
-  const PUBLIC = ["login", "terms", "home", "gigs", "walk", "study", "gig", "help", "shop", "me", "market", "item", "sell"];
+  function renderPrivacy() {
+    return `${header("Privacy policy")}<div class="card">
+      <p><b>Who we are.</b> Work@Campus is a student jobs and support app for University of Limpopo students. ${settings.contact ? `Questions about your information: <b>${esc(settings.contact)}</b>.` : "Questions about your information: contact admin."}</p>
+      <p><b>What we collect.</b> Your name, surname, email, password (stored scrambled, never readable), student number, course, year, where you stay and gender. Businesses: business name and phone. Your posts, messages and food bank requests. For verification: a photo of your student card and a selfie.</p>
+      <p><b>Why.</b> To run your account, to keep students safe (only verified students can accept jobs and join walks), to stop fake accounts, and to take payments.</p>
+      <p><b>Who can see it.</b> Other students only see your first name and "Verified student". Admin sees your full details so they can verify you and keep the app safe. Food bank requests are seen by admin only. We never sell your information.</p>
+      <p><b>Your ID photos.</b> Your student card photo and selfie can only be opened by you and admin. They are deleted as soon as admin has checked them. We only keep whether you were verified.</p>
+      <p><b>Payments.</b> PayFast handles all card and bank details. Work@Campus never sees or stores your card number.</p>
+      <p><b>Where it is kept.</b> On secure online servers (Render and Neon), which may be outside South Africa.</p>
+      <p><b>Your rights.</b> Under POPIA you may ask to see, correct or delete your information. You can delete your account yourself under Me → Delete my account. You may also complain to the Information Regulator (inforegulator.org.za).</p>
+    </div><button class="btn gold" data-go="${me ? "me" : "home"}">Back</button>`;
+  }
+
+  const views = { login: renderLogin, home: renderHome, gigs: renderGigs, walk: renderWalk, study: renderStudy, gig: renderGig, post: renderPost, help: renderHelp, shop: renderShop, me: renderMe, admin: renderAdmin, terms: renderTerms, market: renderMarket, item: renderItem, sell: renderSell, privacy: renderPrivacy };
+  const PUBLIC = ["login", "terms", "home", "gigs", "walk", "study", "gig", "help", "shop", "me", "market", "item", "sell", "privacy"];
 
   function showWelcome(yes) {
     $("welcome").classList.toggle("hidden", !yes);
@@ -367,7 +408,7 @@
   async function render() {
     if (!me && !PUBLIC.includes(view)) view = "login";
     if (["home", "gigs", "walk", "study", "gig"].includes(view)) await loadGigs();
-    if (view === "help" || view === "admin") { try { settings = await api("/api/settings"); } catch { settings = {}; } }
+    if (["help", "admin", "shop", "me", "privacy", "home"].includes(view)) { try { settings = await api("/api/settings"); } catch { settings = {}; } }
     if (["market", "item", "admin"].includes(view)) { try { market = await api("/api/market"); } catch { market = []; } }
     showWelcome(false);
     Object.keys(views).forEach(k => {
@@ -402,6 +443,13 @@
           <div style="margin-top:8px">Subscribers: ${st.subs.starter} Poster · ${st.subs.premium} Campus Pro · ${st.subs.business} Business</div>
           <div>Students: ${st.students} (${st.verified} verified) · Businesses: ${st.businesses}</div>`;
       } catch (e) { $("admin-stats").textContent = e.message; }
+    }
+    if (view === "admin" && $("admin-promos")) {
+      try {
+        const ps = await api("/api/admin/promos");
+        $("admin-promos").innerHTML = ps.map(p => `<div class="reply"><b>${esc(p.code)}</b> · ${esc(p.pct)}% off · used ${esc(p.uses || 0)}${p.max ? " of " + esc(p.max) : ""}${p.plans?.length ? " · " + esc(p.plans.join(", ")) : ""} · ${p.active ? "on" : "off"} <button class="btn sm ghost" data-promo="${esc(p.code)}">${p.active ? "Switch off" : "Switch on"}</button></div>`).join("") || "No codes yet.";
+        document.querySelectorAll("[data-promo]").forEach(b => b.onclick = act(async () => { await api(`/api/admin/promos/${b.dataset.promo}/toggle`, { method: "POST" }); go("admin"); }));
+      } catch (e) { $("admin-promos").textContent = e.message; }
     }
     if (view === "admin" && $("admin-market")) {
       const pend = market.filter(m => m.status === "pending");
@@ -506,6 +554,20 @@
       await api("/api/auth/register", { method: "POST", body: JSON.stringify(body) });
       await loadMe(); toast("Business account created"); go("shop");
     });
+    on("btn-promo", async () => {
+      const plan = $("pr-plan").value;
+      await api("/api/admin/promos", { method: "POST", body: JSON.stringify({ code: $("pr-code").value, pct: Number($("pr-pct").value), max: Number($("pr-max").value), plans: plan ? [plan] : [] }) });
+      toast("Code created"); go("admin");
+    });
+    on("btn-stop-renew", async () => {
+      if (!confirm("Stop automatic renewal? Your plan stays on until the end of the month you paid for.")) return;
+      me = (await api("/api/me/stop-renewal", { method: "POST" })).user; toast("Automatic renewal stopped"); go("me");
+    });
+    on("btn-delete", async () => {
+      if (!confirm("Delete your account for good?")) return;
+      await api("/api/me/delete", { method: "POST", body: JSON.stringify({ password: $("del-pass").value }) });
+      me = null; toast("Your account was deleted"); go("home");
+    });
     on("btn-sponsor", async () => {
       await api("/api/admin/settings", { method: "POST", body: JSON.stringify({ sponsor_name: $("sp-name").value, sponsor_line: $("sp-line").value }) });
       toast("Saved"); go("admin");
@@ -517,7 +579,7 @@
     on("btn-logout", async () => { await api("/api/auth/logout", { method: "POST" }); me = null; toast("Logged out"); go("home"); });
     document.querySelectorAll("[data-buy]").forEach(b => b.onclick = act(async () => {
       if (!me) return go("login");
-      const d = await api("/api/payfast/checkout", { method: "POST", body: JSON.stringify({ item: b.getAttribute("data-buy"), gig: b.getAttribute("data-gig") }) });
+      const d = await api("/api/payfast/checkout", { method: "POST", body: JSON.stringify({ item: b.getAttribute("data-buy"), gig: b.getAttribute("data-gig"), code: $("promo")?.value.trim() || undefined }) });
       toast("Opening PayFast...");
       payfastRedirect(d.url, d.params);
     }));

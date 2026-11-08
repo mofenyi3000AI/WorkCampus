@@ -21,6 +21,10 @@ const PF_MERCHANT_KEY = process.env.PAYFAST_MERCHANT_KEY || (PF_SANDBOX ? "46f0c
 const PF_PASS_RAW = (process.env.PAYFAST_PASSPHRASE || "").trim();
 const PF_PASSPHRASE = PF_PASS_RAW.toLowerCase() === "none" ? "" : (PF_PASS_RAW || (PF_SANDBOX && !process.env.PAYFAST_MERCHANT_ID ? "jt7NOE43FZPn" : ""));
 const PF_HOST = PF_SANDBOX ? "https://sandbox.payfast.co.za" : "https://www.payfast.co.za";
+// Automatic monthly renewal (PayFast subscriptions). PayFast only allows this when the account has a passphrase
+// and "Recurring Billing" is switched on in PayFast. So it stays off until PAYFAST_RECURRING=true is set.
+const PF_RECURRING = process.env.PAYFAST_RECURRING === "true" && !!PF_PASSPHRASE;
+const CONTACT_EMAIL = process.env.CONTACT_EMAIL || process.env.ADMIN_EMAIL || "";
 
 // Prices live on the server only, so nobody can change the price in their browser.
 const PLANS = {
@@ -114,7 +118,8 @@ function publicUser(u) {
   return { id: u.id, first_name: u.first_name, year: u.year, stay: u.stay, gender: u.gender, role: u.role, plan: activePlan(u), verified: !!u.verified, is_admin: !!u.is_admin };
 }
 function fullUser(u) {
-  return { ...publicUser(u), business_name: u.business_name, phone: u.phone, email: u.email, surname: u.surname, student_number: u.student_number, course: u.course, banned: !!u.banned, plan_until: u.plan_until, verify_status: u.verify_status || "none" };
+  const ended = u.plan && u.plan !== "free" && activePlan(u) === "free";
+  return { ...publicUser(u), plan_ended: ended ? u.plan : null, sub_status: u.sub_status || null, business_name: u.business_name, phone: u.phone, email: u.email, surname: u.surname, student_number: u.student_number, course: u.course, banned: !!u.banned, plan_until: u.plan_until, verify_status: u.verify_status || "none" };
 }
 
 // ---------- Accounts ----------
@@ -176,6 +181,9 @@ app.post("/api/admin/verify/:id", auth, adminOnly, wrap(async (req, res) => {
   if (!u) return res.status(404).json({ error: "Not found" });
   const ok = req.body.approve === true;
   u.verified = ok; u.verify_status = ok ? "approved" : "rejected"; u.verify_note = clip(req.body.note, 200);
+  // Privacy: once admin has decided, the student card and selfie are deleted. We only keep the result.
+  for (const id of [u.card_img, u.selfie_img]) if (id) await store.deleteImage(id).catch(() => {});
+  u.card_img = u.selfie_img = undefined;
   await save(); res.json({ ok: true });
 }));
 
@@ -382,6 +390,17 @@ app.post("/api/payfast/checkout", auth, (req, res) => {
     ref = `u${req.me.id}-${key}-g${g.id}-${Date.now()}`;
   }
   if (!PF_MERCHANT_ID || !PF_MERCHANT_KEY) return res.status(503).json({ error: "Payments are not switched on yet" });
+  // Promo code: discount on the first payment only.
+  let amount = plan.amount, code = null;
+  if (req.body.code) {
+    const p = findPromo(req.body.code);
+    if (!p) return res.status(400).json({ error: "That code is not valid" });
+    if (p.plans?.length && !p.plans.includes(key)) return res.status(400).json({ error: "That code is not for this plan" });
+    amount = Math.max(5, Math.round(plan.amount * (100 - p.pct)) / 100); code = p.code;
+  }
+  const recurring = PF_RECURRING && !!plan.months;
+  db.checkouts = Object.fromEntries(Object.entries(db.checkouts || {}).filter(([, c]) => c.used || Date.now() - new Date(c.created_at) < 3 * 864e5));
+  db.checkouts[ref] = { user_id: req.me.id, item: key, amount, code, recurring, created_at: now() };
   const pairs = [
     ["merchant_id", PF_MERCHANT_ID],
     ["merchant_key", PF_MERCHANT_KEY],
@@ -392,11 +411,14 @@ app.post("/api/payfast/checkout", auth, (req, res) => {
     ["name_last", pfSafe(req.me.surname)],
     ["email_address", pfSafe(req.me.email)],
     ["m_payment_id", ref],
-    ["amount", plan.amount.toFixed(2)],
-    ["item_name", plan.name]
+    ["amount", amount.toFixed(2)],
+    ["item_name", plan.name],
+    // PayFast needs these after the item fields, in this order.
+    ...(recurring ? [["subscription_type", "1"], ["recurring_amount", plan.amount.toFixed(2)], ["frequency", "3"], ["cycles", "0"]] : [])
   ].filter(([, v]) => v !== undefined && v !== null && String(v).trim() !== "");
   const params = Object.fromEntries(pairs);
   params.signature = pfSignature(pairs);
+  save();
   res.json({ url: `${PF_HOST}/eng/process`, params });
 });
 
@@ -413,6 +435,11 @@ app.post("/api/payfast/notify", wrap(async (req, res) => {
       method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: pfParamString(pairs)
     });
     if ((await check.text()).trim() !== "VALID") return console.warn("PayFast ITN: PayFast did not confirm");
+    if (data.payment_status === "CANCELLED" && data.token) { // subscription stopped (by the student, admin or PayFast)
+      const u = db.users.find(x => x.sub_token === data.token);
+      if (u) { u.sub_status = "cancelled"; await save(); }
+      return;
+    }
     if (data.payment_status !== "COMPLETE") return;
     if (db.payments.some(p => p.pf_payment_id === data.pf_payment_id)) return; // already handled
 
@@ -428,7 +455,17 @@ async function applyPayment(data) {
   const plan = m && PLANS[m[2]];
   const user = m && db.users.find(u => u.id === Number(m[1]));
   if (!plan || !user) return console.warn("PayFast ITN: unknown user or plan", ref);
-  if (Math.abs(parseFloat(data.amount_gross) - plan.amount) > 0.01) return console.warn("PayFast ITN: amount mismatch");
+  // First payment must match what we asked for at checkout (may include a promo discount).
+  // Later automatic renewals reuse the same reference and must be the full price.
+  const checkout = db.checkouts?.[ref];
+  const renewal = db.payments.some(p => p.ref === ref);
+  const expected = renewal || !checkout ? plan.amount : checkout.amount;
+  if (Math.abs(parseFloat(data.amount_gross) - expected) > 0.01) return console.warn("PayFast ITN: amount mismatch");
+  if (checkout && !renewal) {
+    checkout.used = true;
+    if (checkout.code) { const p = findPromo(checkout.code, true); if (p) p.uses = (p.uses || 0) + 1; }
+  }
+  if (data.token && plan.months) { user.sub_token = data.token; user.sub_status = "active"; user.sub_item = m[2]; }
   if (plan.feature) {
     const g = db.gigs.find(x => x.id === Number(f[3]) && x.poster_id === user.id);
     if (!g) return console.warn("PayFast ITN: post not found for feature", ref);
@@ -441,12 +478,63 @@ async function applyPayment(data) {
     start.setMonth(start.getMonth() + plan.months);
     user.plan = plan.plan; user.plan_until = start.toISOString();
   }
-  db.payments.push({ id: nid(), user_id: user.id, pf_payment_id: data.pf_payment_id, amount: plan.amount, item: m[2], status: "COMPLETE", created_at: now() });
+  db.payments.push({ id: nid(), user_id: user.id, pf_payment_id: data.pf_payment_id, ref, amount: expected, item: m[2], renewal, code: (!renewal && checkout?.code) || undefined, status: "COMPLETE", created_at: now() });
   await save();
   console.log(`PayFast: user ${user.id} paid for ${m[2]}`);
 }
 // Test-only shortcut to simulate a confirmed payment. Never set WC_TEST_HOOKS on a real server.
 if (process.env.WC_TEST_HOOKS === "1" && !PROD) app.post("/api/test/paid", wrap(async (req, res) => { await applyPayment(req.body); res.json({ ok: true }); }));
+
+// ---------- Stop automatic renewal ----------
+// PayFast API signature: all header and body values plus the passphrase, sorted by name.
+function pfApiSignature(fields) {
+  const all = { ...fields, passphrase: PF_PASSPHRASE };
+  return crypto.createHash("md5").update(Object.keys(all).sort().map(k => `${k}=${encodeURIComponent(String(all[k]).trim()).replace(/%20/g, "+")}`).join("&")).digest("hex");
+}
+app.post("/api/me/stop-renewal", auth, wrap(async (req, res) => {
+  if (!req.me.sub_token || req.me.sub_status !== "active") return res.status(400).json({ error: "You have no automatic renewal" });
+  const headers = { "merchant-id": PF_MERCHANT_ID, version: "v1", timestamp: new Date().toISOString().replace(/\.\d+Z$/, "") };
+  headers.signature = pfApiSignature(headers);
+  const r = await fetch(`https://api.payfast.co.za/subscriptions/${encodeURIComponent(req.me.sub_token)}/cancel${PF_SANDBOX ? "?testing=true" : ""}`, { method: "PUT", headers });
+  if (!r.ok) { console.warn("PayFast cancel failed:", r.status, await r.text().catch(() => "")); return res.status(502).json({ error: "Could not stop it right now. Please try again later or contact admin." }); }
+  req.me.sub_status = "cancelled"; await save();
+  res.json({ user: fullUser(req.me) });
+}));
+
+// ---------- Promo codes (e.g. LAUNCH50 = 50% off the first payment) ----------
+function findPromo(code, any) {
+  const c = String(code || "").trim().toUpperCase();
+  return (db.promos || []).find(p => p.code === c && (any || (p.active && (!p.max || (p.uses || 0) < p.max))));
+}
+app.get("/api/admin/promos", auth, adminOnly, (req, res) => res.json(db.promos || []));
+app.post("/api/admin/promos", auth, adminOnly, wrap(async (req, res) => {
+  const code = clip(req.body.code, 20).toUpperCase().replace(/[^A-Z0-9]/g, "");
+  const pct = Math.round(Number(req.body.pct));
+  if (!code || !(pct >= 1 && pct <= 90)) return res.status(400).json({ error: "Enter a code and a discount from 1 to 90%" });
+  db.promos = db.promos || [];
+  if (db.promos.some(p => p.code === code)) return res.status(400).json({ error: "That code already exists" });
+  const plans = Array.isArray(req.body.plans) ? req.body.plans.filter(k => PLANS[k]) : [];
+  db.promos.push({ code, pct, max: Math.max(0, Math.round(Number(req.body.max) || 0)), plans, uses: 0, active: true, created_at: now() });
+  await save(); res.json(db.promos);
+}));
+app.post("/api/admin/promos/:code/toggle", auth, adminOnly, wrap(async (req, res) => {
+  const p = findPromo(req.params.code, true);
+  if (!p) return res.status(404).json({ error: "Not found" });
+  p.active = !p.active; await save(); res.json(db.promos);
+}));
+
+// ---------- Delete my account (POPIA: students can ask for their information to be removed) ----------
+app.post("/api/me/delete", auth, wrap(async (req, res) => {
+  const u = req.me;
+  if (u.is_admin) return res.status(400).json({ error: "The admin account cannot be deleted" });
+  if (!bcrypt.compareSync(String(req.body.password || ""), u.password_hash)) return res.status(400).json({ error: "Wrong password" });
+  for (const id of [u.card_img, u.selfie_img]) if (id) await store.deleteImage(id).catch(() => {});
+  db.gigs.forEach(g => { if (g.poster_id === u.id && g.status === "open") g.status = "removed"; });
+  db.market.forEach(m => { if (m.seller_id === u.id && m.status !== "sold") m.status = "removed"; });
+  for (const k of ["surname", "student_number", "course", "year", "stay", "gender", "phone", "business_name", "card_img", "selfie_img", "sub_token"]) delete u[k];
+  Object.assign(u, { first_name: "Deleted user", email: `deleted-${u.id}@deleted.invalid`, password_hash: "!", banned: true, deleted_at: now() });
+  await save(); res.clearCookie("token"); res.json({ ok: true });
+}));
 
 app.get("/api/admin/payments", auth, adminOnly, (req, res) => res.json(db.payments.slice().reverse()));
 
@@ -464,7 +552,7 @@ app.get("/api/admin/stats", auth, adminOnly, (req, res) => {
 });
 
 // Food bank sponsor ("Plate Fund partner") shown to students. Admin sets it.
-app.get("/api/settings", (req, res) => res.json({ sponsor: db.settings?.sponsor || null }));
+app.get("/api/settings", (req, res) => res.json({ sponsor: db.settings?.sponsor || null, recurring: PF_RECURRING, contact: CONTACT_EMAIL }));
 app.post("/api/admin/settings", auth, adminOnly, wrap(async (req, res) => {
   const name = clip(req.body.sponsor_name, 80);
   db.settings = { ...(db.settings || {}), sponsor: name ? { name, line: clip(req.body.sponsor_line, 140) } : null };

@@ -50,3 +50,35 @@ If the plan does not switch on: in Render, open **Logs** and look for a line sta
 ## Fees
 PayFast takes a small fee from each payment. Check the current fees on PayFast's pricing page
 so you know what lands in your bank from each R39 and R79.
+
+---
+
+# Automatic monthly renewal (switch on later)
+
+The app can charge students and businesses **every month by itself**, so they don't have to come back and pay.
+It is **off** until you switch it on, because PayFast has two rules:
+
+1. **The PayFast account must have a passphrase.** Your beegroup.co.za shop uses the same account,
+   and changing its passphrase can break the shop.
+2. **Recurring Billing must be switched on** in PayFast.
+
+## The safe way: a separate PayFast account for Work@Campus
+1. Ask PayFast (support or your account page) to open a **second merchant account** for Work@Campus,
+   or open a new one in the name of the Work@Campus business.
+2. On that account only: **Settings → Developer settings → set a passphrase.** Choose a long one and keep it private.
+3. On that account: switch on **Recurring Billing** (also called Subscriptions) in Settings.
+   If you can't find it, ask PayFast support to switch it on.
+4. In Render → WorkCampus → **Environment**, update:
+
+| Name | Value |
+|---|---|
+| `PAYFAST_MERCHANT_ID` | the new account's Merchant ID |
+| `PAYFAST_MERCHANT_KEY` | the new account's Merchant Key |
+| `PAYFAST_PASSPHRASE` | the passphrase you set in step 2 |
+| `PAYFAST_RECURRING` | `true` |
+
+5. Save. Render restarts the app. The Plans page now says "Plans renew automatically every month".
+6. Test: buy the R39 plan with your own card. Under **Me** it should say "renews automatically on ...".
+   Tap **Stop automatic renewal** to check that it stops, and look in PayFast to confirm the subscription is cancelled.
+
+If something goes wrong, set `PAYFAST_RECURRING` to `false`. Payments go back to one month at a time.
