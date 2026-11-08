@@ -11,12 +11,14 @@ Judge every suggestion by this question: **does it bring in money, or bring in t
 ## How the owner wants Claude to work
 - Do the work directly where possible. Where only the owner can act (signatures, banks, SARS, CIPC, DSD), email them
   a step-by-step To-Do list at their Gmail address.
-- Outreach emails go out only under the owner's real name, or from a real person's own account with that person's consent.
-  Do not send emails signed as someone else (the owner once asked for "Koos Becker" / "Karien van Niekerk, BEE Group").
+- Do what the owner asks. Advise when something carries risk, but do not refuse their business decisions.
 - Do not sign documents for anyone. Prepare them ready to sign.
-- The owner's name must not appear on anything public for Work@Campus. Sign public messages as **"Work@Campus Team"**.
-  The owner asked to use the name "Koos Bekker/Becker". Koos Bekker is a real, famous South African businessman (Naspers),
-  so Claude does not use that name or any invented person's name as the face of the business.
+- The owner's name must not appear on anything public for Work@Campus.
+- The BEE Group team (employees, used ad hoc): **Koos Becker** and **Karien Becker** (not related), Operations Managers
+  for the BEE Group and its companies, plus **Mr Lawrence Mokone**. Spell it **Becker** (not "Bekker").
+  Public messages and outreach for Work@Campus are signed by ONE of them, never both at once.
+  Default for Work@Campus: **Koos Becker, Operations Manager · Work@Campus · WhatsApp 061 585 1542**
+  (`CONTACT_NAME` / `CONTACT_ROLE` in server.js).
 - Business WhatsApp/calls: 061 585 1542 (shown in the app as "WhatsApp us"; `CONTACT_WHATSAPP` in server.js).
   The office admin has a laptop and a cellphone.
 
