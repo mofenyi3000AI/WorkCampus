@@ -4,6 +4,9 @@ This guide is for the Work@Campus office admin. It shows where to click, step by
 
 App link: **https://workcampus.onrender.com**
 
+**Laptop or cellphone?** Both work. Use the laptop for the Admin desk (photos are bigger and easier to check).
+Use your cellphone for posting in WhatsApp and Facebook groups. Log in on both with the same email and password.
+
 ---
 
 ## Part 1: Set up (one time, 10 minutes)
@@ -62,7 +65,8 @@ Students who need food ask here quietly. **This is the most private part of the 
 3. If you are not sure, take a screenshot and ask the owner.
 
 ### Step 5: Forgot password
-A member messages you that they forgot their password:
+Members who forget their password tap **WhatsApp us** in the app, which messages the Work@Campus business number.
+When the owner forwards such a message to you (or a member messages you directly):
 1. On the Admin desk, go to **Forgot password**.
 2. Type **their** email address. Tap **Make temporary password**.
 3. Send the temporary password to that member privately (WhatsApp or email).
@@ -111,6 +115,9 @@ You will not see these on your Admin desk. That is normal:
 | Anything else | Screenshot the screen and send it to the owner on WhatsApp. |
 
 ---
+
+## How to sign your messages
+When you message members, businesses or groups, sign as **Work@Campus Team**. Do not use your own name or the owner's name.
 
 ## The 5 golden rules
 1. Private information stays private: ID photos, food requests, names and student numbers.
