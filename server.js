@@ -95,6 +95,11 @@ function auth(req, res, next) {
   if (req.me.banned) return res.status(403).json({ error: "Account restricted" });
   next();
 }
+// Only the owner can change who has access, add campuses or record ambassador payouts.
+function ownerOnly(req, res, next) {
+  if (!req.me?.owner) return res.status(403).json({ error: "Only the owner can do this" });
+  next();
+}
 function adminOnly(req, res, next) {
   if (!req.me?.is_admin) return res.status(403).json({ error: "Admin only" });
   next();
@@ -146,7 +151,7 @@ function publicUser(u) {
 function fullUser(u) {
   const amb = u.ambassador ? ambassadorSummary(u) : null;
   const ended = u.plan && u.plan !== "free" && activePlan(u) === "free";
-  return { ...publicUser(u), campus: userCampus(u), ambassador: amb, plan_ended: ended ? u.plan : null, sub_status: u.sub_status || null, business_name: u.business_name, phone: u.phone, email: u.email, surname: u.surname, student_number: u.student_number, course: u.course, banned: !!u.banned, plan_until: u.plan_until, verify_status: u.verify_status || "none" };
+  return { ...publicUser(u), owner: !!u.owner, campus: userCampus(u), ambassador: amb, plan_ended: ended ? u.plan : null, sub_status: u.sub_status || null, business_name: u.business_name, phone: u.phone, email: u.email, surname: u.surname, student_number: u.student_number, course: u.course, banned: !!u.banned, plan_until: u.plan_until, verify_status: u.verify_status || "none" };
 }
 
 // ---------- Accounts ----------
@@ -335,7 +340,7 @@ app.get("/api/plates/mine", auth, (req, res) => {
 app.get("/api/admin/plates", auth, adminOnly, (req, res) => {
   res.json(db.plates.map(p => {
     const u = db.users.find(x => x.id === p.user_id) || {};
-    return { ...p, first_name: u.first_name, surname: u.surname, student_number: u.student_number };
+    return { ...p, first_name: u.first_name, surname: u.surname, student_number: u.student_number, email: u.email, phone: u.phone };
   }).sort((a, b) => b.id - a.id));
 });
 
@@ -539,7 +544,7 @@ app.post("/api/me/stop-renewal", auth, wrap(async (req, res) => {
 
 // ---------- Campuses ----------
 app.get("/api/campuses", (req, res) => res.json(campuses()));
-app.post("/api/admin/campuses", auth, adminOnly, wrap(async (req, res) => {
+app.post("/api/admin/campuses", auth, ownerOnly, wrap(async (req, res) => {
   const slug = clip(req.body.slug, 12).toLowerCase().replace(/[^a-z0-9]/g, ""), name = clip(req.body.name, 80), short = clip(req.body.short, 12);
   if (!slug || !name) return res.status(400).json({ error: "Enter a short link name (e.g. univen) and the full name" });
   if (RESERVED.includes(slug)) return res.status(400).json({ error: "Choose another short name" });
@@ -567,7 +572,7 @@ app.get("/api/admin/team", auth, adminOnly, (req, res) => {
     id: u.id, name: `${u.first_name} ${u.surname || ""}`.trim(), email: u.email, campus: userCampus(u), owner: !!u.owner,
     admin: !!u.is_admin, ambassador: u.ambassador ? ambassadorSummary(u) : null })));
 });
-app.post("/api/admin/team", auth, adminOnly, wrap(async (req, res) => {
+app.post("/api/admin/team", auth, ownerOnly, wrap(async (req, res) => {
   const u = db.users.find(x => x.email === clip(req.body.email, 120).toLowerCase() && !x.deleted_at);
   if (!u) return res.status(404).json({ error: "No account with that email. Ask them to join first." });
   const role = String(req.body.role || "");
@@ -580,7 +585,7 @@ app.post("/api/admin/team", auth, adminOnly, wrap(async (req, res) => {
   await save(); res.json({ ok: true });
 }));
 // Record that an ambassador's commission was paid out (e.g. by EFT).
-app.post("/api/admin/team/:id/paid", auth, adminOnly, wrap(async (req, res) => {
+app.post("/api/admin/team/:id/paid", auth, ownerOnly, wrap(async (req, res) => {
   const u = db.users.find(x => x.id === Number(req.params.id) && x.ambassador);
   if (!u) return res.status(404).json({ error: "Not found" });
   const owed = ambassadorSummary(u).owed;
@@ -597,13 +602,28 @@ app.get("/r/:code", (req, res) => {
   sendIndex(res, campusOf(userCampus(amb)) || campuses()[0]);
 });
 
+// ---------- Forgotten password: admin makes a temporary one and sends it to the member ----------
+app.post("/api/admin/reset-password", auth, adminOnly, wrap(async (req, res) => {
+  const u = db.users.find(x => x.email === clip(req.body.email, 120).toLowerCase() && !x.deleted_at);
+  if (!u) return res.status(404).json({ error: "No account with that email" });
+  if ((u.is_admin || u.owner) && !req.me.owner) return res.status(403).json({ error: "Only the owner can reset an admin's password" });
+  const temp = "wc-" + crypto.randomBytes(4).toString("hex");
+  u.password_hash = bcrypt.hashSync(temp, 10); await save();
+  res.json({ name: `${u.first_name} ${u.surname || ""}`.trim(), temp });
+}));
+app.post("/api/me/password", auth, wrap(async (req, res) => {
+  if (!bcrypt.compareSync(String(req.body.old || ""), req.me.password_hash)) return res.status(400).json({ error: "Your current password is wrong" });
+  if (String(req.body.password || "").length < 6) return res.status(400).json({ error: "New password must be at least 6 characters" });
+  req.me.password_hash = bcrypt.hashSync(String(req.body.password), 10); await save(); res.json({ ok: true });
+}));
+
 // ---------- Promo codes (e.g. LAUNCH50 = 50% off the first payment) ----------
 function findPromo(code, any) {
   const c = String(code || "").trim().toUpperCase();
   return (db.promos || []).find(p => p.code === c && (any || (p.active && (!p.max || (p.uses || 0) < p.max))));
 }
-app.get("/api/admin/promos", auth, adminOnly, (req, res) => res.json(db.promos || []));
-app.post("/api/admin/promos", auth, adminOnly, wrap(async (req, res) => {
+app.get("/api/admin/promos", auth, ownerOnly, (req, res) => res.json(db.promos || []));
+app.post("/api/admin/promos", auth, ownerOnly, wrap(async (req, res) => {
   const code = clip(req.body.code, 20).toUpperCase().replace(/[^A-Z0-9]/g, "");
   const pct = Math.round(Number(req.body.pct));
   if (!code || !(pct >= 1 && pct <= 90)) return res.status(400).json({ error: "Enter a code and a discount from 1 to 90%" });
@@ -613,7 +633,7 @@ app.post("/api/admin/promos", auth, adminOnly, wrap(async (req, res) => {
   db.promos.push({ code, pct, max: Math.max(0, Math.round(Number(req.body.max) || 0)), plans, uses: 0, active: true, created_at: now() });
   await save(); res.json(db.promos);
 }));
-app.post("/api/admin/promos/:code/toggle", auth, adminOnly, wrap(async (req, res) => {
+app.post("/api/admin/promos/:code/toggle", auth, ownerOnly, wrap(async (req, res) => {
   const p = findPromo(req.params.code, true);
   if (!p) return res.status(404).json({ error: "Not found" });
   p.active = !p.active; await save(); res.json(db.promos);
@@ -635,7 +655,7 @@ app.post("/api/me/delete", auth, wrap(async (req, res) => {
 app.get("/api/admin/payments", auth, adminOnly, (req, res) => res.json(db.payments.slice().reverse()));
 
 // Money dashboard for the owner: income this month, monthly subscriptions, progress to the goal.
-app.get("/api/admin/stats", auth, adminOnly, (req, res) => {
+app.get("/api/admin/stats", auth, ownerOnly, (req, res) => {
   const d = new Date(), monthStart = new Date(d.getFullYear(), d.getMonth(), 1), lastStart = new Date(d.getFullYear(), d.getMonth() - 1, 1);
   const sum = (from, to) => db.payments.filter(p => { const t = new Date(p.created_at); return t >= from && t < to; }).reduce((a, p) => a + p.amount, 0);
   const price = { starter: 39, premium: 79, business: 499 };
