@@ -1,12 +1,26 @@
 # Work@Campus: notes for Claude
 
 ## The owner's goal
+The owner wants to build **businesses that make money on their own**, and to personally earn **R300,000 a month**
+(R600,000 a month is the stretch goal). Work@Campus is the first of these businesses.
+After tax, R300,000 a month take-home needs roughly R500,000 a month profit across their businesses.
 The owner wants Work@Campus to become an app that makes **millions**. They are not a developer
 ("I don't know what I'm doing"), so explain things in plain words, avoid jargon, and give clear next steps.
 Judge every suggestion by this question: **does it bring in money, or bring in the students who will pay?**
 
+## How the owner wants Claude to work
+- Do the work directly where possible. Where only the owner can act (signatures, banks, SARS, CIPC, DSD), email them
+  a step-by-step To-Do list at their Gmail address.
+- Outreach emails go out only under the owner's real name, or from a real person's own account with that person's consent.
+  Do not send emails signed as someone else (the owner once asked for "Koos Becker" / "Karien van Niekerk, BEE Group").
+- Do not sign documents for anyone. Prepare them ready to sign.
+
 ## The money today
 - Poster plan R39/month (post paid jobs). Campus Pro R79/month (post jobs and sell on the market).
+- Business plan R499/month: business accounts (no student number), business name on posts, all their job posts featured at the top, can sell.
+- Featured post R29 for 7 days (one-off), for anyone's own open job post.
+- Admin desk shows a Money card: income this month, monthly subscriptions, progress bar to R300,000.
+- Admin can set a Food bank sponsor ("Plate Fund partner") shown to students.
 - Payments go through PayFast. Prices are set in `server.js` (`PLANS`).
 - The owner's other business is beegroup.co.za, which uses the same PayFast account. Never change the PayFast passphrase.
 

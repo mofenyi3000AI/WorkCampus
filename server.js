@@ -25,8 +25,14 @@ const PF_HOST = PF_SANDBOX ? "https://sandbox.payfast.co.za" : "https://www.payf
 // Prices live on the server only, so nobody can change the price in their browser.
 const PLANS = {
   "poster-1m": { amount: 39, months: 1, plan: "starter", name: "Work@Campus Poster - 1 month" },
-  "pro-1m": { amount: 79, months: 1, plan: "premium", name: "Work@Campus Campus Pro - 1 month" }
+  "pro-1m": { amount: 79, months: 1, plan: "premium", name: "Work@Campus Campus Pro - 1 month" },
+  // For shops, landlords and employers who want to reach students. Includes featured posts.
+  "biz-1m": { amount: 499, months: 1, plan: "business", name: "Work@Campus Business - 1 month" },
+  // One-off: put one of your job posts at the top of the list for 7 days.
+  "feature-7d": { amount: 29, days: 7, feature: true, name: "Work@Campus Featured post - 7 days" }
 };
+const SELLER_PLANS = ["premium", "business"];
+const GOAL = 300000; // the owner's monthly income goal in rand (shown on the admin desk)
 const FREE_CATS = ["walk", "study"]; // free members can ask for a walking buddy or study partner
 
 let db;
@@ -108,7 +114,7 @@ function publicUser(u) {
   return { id: u.id, first_name: u.first_name, year: u.year, stay: u.stay, gender: u.gender, role: u.role, plan: activePlan(u), verified: !!u.verified, is_admin: !!u.is_admin };
 }
 function fullUser(u) {
-  return { ...publicUser(u), email: u.email, surname: u.surname, student_number: u.student_number, course: u.course, banned: !!u.banned, plan_until: u.plan_until, verify_status: u.verify_status || "none" };
+  return { ...publicUser(u), business_name: u.business_name, phone: u.phone, email: u.email, surname: u.surname, student_number: u.student_number, course: u.course, banned: !!u.banned, plan_until: u.plan_until, verify_status: u.verify_status || "none" };
 }
 
 // ---------- Accounts ----------
@@ -116,14 +122,19 @@ app.post("/api/auth/register", wrap(async (req, res) => {
   const email = clip(req.body.email, 120).toLowerCase();
   const password = String(req.body.password || "");
   const first_name = clip(req.body.first_name, 60), surname = clip(req.body.surname, 60), student_number = clip(req.body.student_number, 20);
-  if (!email || !first_name || !surname || !student_number) return res.status(400).json({ error: "Fill in name, surname, email and student number" });
+  const isBiz = req.body.account_type === "business";
+  const business_name = clip(req.body.business_name, 80), phone = clip(req.body.phone, 20);
+  if (isBiz) {
+    if (!email || !first_name || !surname || !business_name || !phone) return res.status(400).json({ error: "Fill in your name, business name, phone and email" });
+  } else if (!email || !first_name || !surname || !student_number) return res.status(400).json({ error: "Fill in name, surname, email and student number" });
   if (!/^\S+@\S+\.\S+$/.test(email)) return res.status(400).json({ error: "Enter a valid email" });
   if (password.length < 6) return res.status(400).json({ error: "Password must be at least 6 characters" });
   if (db.users.some(u => u.email === email)) return res.status(400).json({ error: "Email already registered" });
   const user = {
     id: nid(), email, password_hash: bcrypt.hashSync(password, 10), first_name, surname, student_number,
     course: clip(req.body.course, 80), year: clip(req.body.year, 20), stay: clip(req.body.stay, 20), gender: clip(req.body.gender, 20),
-    role: "student", plan: "free", verified: false, banned: false, is_admin: false, created_at: now()
+    role: isBiz ? "business" : "student", business_name: isBiz ? business_name : undefined, phone: phone || undefined,
+    plan: "free", verified: false, banned: false, is_admin: false, created_at: now()
   };
   db.users.push(user); await save();
   const token = jwt.sign({ id: user.id }, JWT_SECRET, { expiresIn: "30d" });
@@ -181,16 +192,18 @@ app.get("/api/gigs", (req, res) => {
     .filter(g => g.status !== "removed" && (!cat || g.cat === cat))
     .map(g => {
       const u = db.users.find(x => x.id === g.poster_id) || {};
-      const who = u.is_admin ? "Work@Campus team" : u.verified ? `Verified ${u.role === "lecturer" ? "lecturer" : "student"}` : "New member (not verified yet)";
+      const who = u.is_admin ? "Work@Campus team" : u.role === "business" ? `Business · ${u.business_name || ""}` : u.verified ? `Verified ${u.role === "lecturer" ? "lecturer" : "student"}` : "New member (not verified yet)";
       const label = `${who}${u.year ? " · " + u.year : ""}${u.stay ? " · " + u.stay : ""}`;
-      return { ...g, public_label: isAdmin ? `${u.first_name || ""} ${u.surname || ""}`.trim() : label };
+      const featured = g.status === "open" && ((g.featured_until && new Date(g.featured_until) > new Date()) || (u.role === "business" && activePlan(u) === "business"));
+      return { ...g, featured, public_label: isAdmin ? `${u.first_name || ""} ${u.surname || ""}`.trim() : label };
     })
-    .sort((a, b) => b.id - a.id);
+    .sort((a, b) => (b.featured - a.featured) || (b.id - a.id));
   res.json(list);
 });
 
 app.post("/api/gigs", auth, wrap(async (req, res) => {
   const cat = clip(req.body.cat, 20) || "other";
+  if (req.me.role === "business" && FREE_CATS.includes(cat)) return res.status(400).json({ error: "Walk and study posts are for students" });
   const isFreeCat = FREE_CATS.includes(cat);
   if (activePlan(req.me) === "free" && !isFreeCat) return res.status(403).json({ error: "Subscribe to post paid jobs" });
   const title = clip(req.body.title, 100);
@@ -311,7 +324,7 @@ app.get("/api/market", (req, res) => {
 });
 
 app.post("/api/market", auth, wrap(async (req, res) => {
-  if (activePlan(req.me) !== "premium") return res.status(403).json({ error: "Selling is part of Campus Pro (R79)" });
+  if (!SELLER_PLANS.includes(activePlan(req.me))) return res.status(403).json({ error: "Selling is part of Campus Pro (R79) or Business (R499)" });
   const title = clip(req.body.title, 100);
   if (!title) return res.status(400).json({ error: "Add a title" });
   const price = Math.round(Number(req.body.price));
@@ -362,6 +375,12 @@ app.post("/api/payfast/checkout", auth, (req, res) => {
   const key = String(req.body.item || "");
   const plan = PLANS[key];
   if (!plan) return res.status(400).json({ error: "Unknown plan" });
+  let ref = `u${req.me.id}-${key}-${Date.now()}`;
+  if (plan.feature) {
+    const g = db.gigs.find(x => x.id === Number(req.body.gig));
+    if (!g || g.poster_id !== req.me.id || g.status !== "open" || FREE_CATS.includes(g.cat)) return res.status(400).json({ error: "You can feature your own open job posts" });
+    ref = `u${req.me.id}-${key}-g${g.id}-${Date.now()}`;
+  }
   if (!PF_MERCHANT_ID || !PF_MERCHANT_KEY) return res.status(503).json({ error: "Payments are not switched on yet" });
   const pairs = [
     ["merchant_id", PF_MERCHANT_ID],
@@ -372,7 +391,7 @@ app.post("/api/payfast/checkout", auth, (req, res) => {
     ["name_first", pfSafe(req.me.first_name)],
     ["name_last", pfSafe(req.me.surname)],
     ["email_address", pfSafe(req.me.email)],
-    ["m_payment_id", `u${req.me.id}-${key}-${Date.now()}`],
+    ["m_payment_id", ref],
     ["amount", plan.amount.toFixed(2)],
     ["item_name", plan.name]
   ].filter(([, v]) => v !== undefined && v !== null && String(v).trim() !== "");
@@ -397,22 +416,60 @@ app.post("/api/payfast/notify", wrap(async (req, res) => {
     if (data.payment_status !== "COMPLETE") return;
     if (db.payments.some(p => p.pf_payment_id === data.pf_payment_id)) return; // already handled
 
-    const m = /^u(\d+)-([a-z0-9-]+?)-\d+$/.exec(data.m_payment_id || "");
-    const plan = m && PLANS[m[2]];
-    const user = m && db.users.find(u => u.id === Number(m[1]));
-    if (!plan || !user) return console.warn("PayFast ITN: unknown user or plan", data.m_payment_id);
-    if (Math.abs(parseFloat(data.amount_gross) - plan.amount) > 0.01) return console.warn("PayFast ITN: amount mismatch");
-
-    const start = user.plan_until && new Date(user.plan_until) > new Date() ? new Date(user.plan_until) : new Date();
-    start.setMonth(start.getMonth() + plan.months);
-    user.plan = plan.plan; user.plan_until = start.toISOString();
-    db.payments.push({ id: nid(), user_id: user.id, pf_payment_id: data.pf_payment_id, amount: plan.amount, item: m[2], status: "COMPLETE", created_at: now() });
-    await save();
-    console.log(`PayFast: user ${user.id} upgraded to ${plan.plan} until ${user.plan_until}`);
+    await applyPayment(data);
   } catch (e) { console.error("PayFast ITN error:", e.message); }
 }));
 
+// Runs only after PayFast has confirmed a payment. Switches on the plan or the featured post.
+async function applyPayment(data) {
+  const ref = data.m_payment_id || "";
+  const f = /^u(\d+)-(feature-7d)-g(\d+)-\d+$/.exec(ref);
+  const m = f || /^u(\d+)-([a-z0-9-]+?)-\d+$/.exec(ref);
+  const plan = m && PLANS[m[2]];
+  const user = m && db.users.find(u => u.id === Number(m[1]));
+  if (!plan || !user) return console.warn("PayFast ITN: unknown user or plan", ref);
+  if (Math.abs(parseFloat(data.amount_gross) - plan.amount) > 0.01) return console.warn("PayFast ITN: amount mismatch");
+  if (plan.feature) {
+    const g = db.gigs.find(x => x.id === Number(f[3]) && x.poster_id === user.id);
+    if (!g) return console.warn("PayFast ITN: post not found for feature", ref);
+    const from = g.featured_until && new Date(g.featured_until) > new Date() ? new Date(g.featured_until) : new Date();
+    g.featured_until = new Date(from.getTime() + plan.days * 864e5).toISOString();
+  } else {
+    // Keep paid-up time when renewing the same plan; switching plans starts a fresh month.
+    const same = user.plan === plan.plan && user.plan_until && new Date(user.plan_until) > new Date();
+    const start = same ? new Date(user.plan_until) : new Date();
+    start.setMonth(start.getMonth() + plan.months);
+    user.plan = plan.plan; user.plan_until = start.toISOString();
+  }
+  db.payments.push({ id: nid(), user_id: user.id, pf_payment_id: data.pf_payment_id, amount: plan.amount, item: m[2], status: "COMPLETE", created_at: now() });
+  await save();
+  console.log(`PayFast: user ${user.id} paid for ${m[2]}`);
+}
+// Test-only shortcut to simulate a confirmed payment. Never set WC_TEST_HOOKS on a real server.
+if (process.env.WC_TEST_HOOKS === "1" && !PROD) app.post("/api/test/paid", wrap(async (req, res) => { await applyPayment(req.body); res.json({ ok: true }); }));
+
 app.get("/api/admin/payments", auth, adminOnly, (req, res) => res.json(db.payments.slice().reverse()));
+
+// Money dashboard for the owner: income this month, monthly subscriptions, progress to the goal.
+app.get("/api/admin/stats", auth, adminOnly, (req, res) => {
+  const d = new Date(), monthStart = new Date(d.getFullYear(), d.getMonth(), 1), lastStart = new Date(d.getFullYear(), d.getMonth() - 1, 1);
+  const sum = (from, to) => db.payments.filter(p => { const t = new Date(p.created_at); return t >= from && t < to; }).reduce((a, p) => a + p.amount, 0);
+  const price = { starter: 39, premium: 79, business: 499 };
+  const subs = { starter: 0, premium: 0, business: 0 };
+  db.users.forEach(u => { if (!u.is_admin && subs[activePlan(u)] !== undefined) subs[activePlan(u)]++; });
+  const monthly = Object.entries(subs).reduce((a, [k, n]) => a + n * price[k], 0);
+  res.json({ this_month: sum(monthStart, new Date(8.64e15)), last_month: sum(lastStart, monthStart), monthly_subscriptions: monthly, subs,
+    students: db.users.filter(u => u.role === "student").length, verified: db.users.filter(u => u.role === "student" && u.verified).length,
+    businesses: db.users.filter(u => u.role === "business").length, goal: GOAL });
+});
+
+// Food bank sponsor ("Plate Fund partner") shown to students. Admin sets it.
+app.get("/api/settings", (req, res) => res.json({ sponsor: db.settings?.sponsor || null }));
+app.post("/api/admin/settings", auth, adminOnly, wrap(async (req, res) => {
+  const name = clip(req.body.sponsor_name, 80);
+  db.settings = { ...(db.settings || {}), sponsor: name ? { name, line: clip(req.body.sponsor_line, 140) } : null };
+  await save(); res.json({ ok: true, sponsor: db.settings.sponsor });
+}));
 app.get("/api/health", (req, res) => res.json({ ok: true }));
 
 app.use((err, req, res, next) => {

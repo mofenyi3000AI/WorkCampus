@@ -5,6 +5,7 @@
   let gigs = [];
   let selectedGig = null;
   let market = [];
+  let settings = {};
   let selectedItem = null;
 
   // Stops anyone from sneaking code into a post (every user text goes through this).
@@ -105,6 +106,19 @@
           ${photoField("r-selfie", "Selfie", "Your face, good light", "user")}
         </div>
         <button class="btn teal" id="btn-register">Create free account</button>
+      </div>
+      <div class="card">
+        <h3>Business or employer?</h3>
+        <p class="tiny">Shops, landlords, restaurants and companies: post jobs to UL students. Your posts show your business name and go to the top.</p>
+        <div class="grid-2">
+          <div class="field"><label>Your name</label><input id="b-first" /></div>
+          <div class="field"><label>Surname</label><input id="b-surname" /></div>
+        </div>
+        <div class="field"><label>Business name</label><input id="b-name" maxlength="80" /></div>
+        <div class="field"><label>Phone</label><input id="b-phone" type="tel" inputmode="tel" /></div>
+        <div class="field"><label>Email</label><input id="b-email" type="email" autocomplete="email" /></div>
+        <div class="field"><label>Password (6+ characters)</label><input id="b-pass" type="password" autocomplete="new-password" /></div>
+        <button class="btn gold" id="btn-register-biz">Create business account</button>
       </div>`;
   }
 
@@ -130,9 +144,9 @@
   }
 
   function gigCard(g) {
-    return `<article class="card tap" data-open-gig="${g.id}">
+    return `<article class="card tap" data-open-gig="${g.id}" ${g.featured ? `style="border:2px solid #C7A941"` : ""}>
       ${g.photo ? `<img src="/api/img/${esc(g.photo)}" alt="" loading="lazy" style="width:100%;max-height:170px;object-fit:cover;border-radius:14px;margin-bottom:10px" />` : ""}
-      <div class="between"><span class="tag">${esc(CAT_NAMES[g.cat] || g.cat)}</span><div class="price">${g.pay ? "R" + esc(g.pay) : "Free"}</div></div>
+      <div class="between"><span>${g.featured ? `<span class="tag" style="background:#C7A941;color:#1B2642">★ Featured</span> ` : ""}<span class="tag">${esc(CAT_NAMES[g.cat] || g.cat)}</span></span><div class="price">${g.pay ? "R" + esc(g.pay) : "Free"}</div></div>
       <h3>${esc(g.title)}</h3>
       <div class="meta">${placeTime(g)}</div>
       <div class="meta">${esc(g.public_label || "Verified student")}${g.status !== "open" ? ` · <span class="status">${esc(g.status)}</span>` : ""}</div>
@@ -144,7 +158,8 @@
     return `${header(title)}
       ${list.map(gigCard).join("") || `<p class="list-empty">${emptyMsg}</p>`}
       <button class="fab" data-post="${postCat || ""}" aria-label="Post">+</button>
-      ${!me ? `<p class="tiny">Log in to post or reply.</p>` : !canPost ? `<p class="tiny">Posting paid jobs needs a plan. Finding work is free.</p>` : ""}`;
+      ${!me ? `<p class="tiny">Log in to post or reply.</p>` : !canPost ? `<p class="tiny">Posting paid jobs needs a plan. Finding work is free.</p>` : ""}
+      ${!postCat && (!me || me.role === "business") && !(me && me.plan === "business") ? `<p class="tiny"><b>Hiring students?</b> Businesses post with their name at the top. <a href="#" data-go="${me ? "shop" : "login"}">See the Business plan</a></p>` : ""}`;
   }
 
   const renderGigs = () => listView("Campus gigs", gigs.filter(g => g.cat !== "walk" && g.cat !== "study"), "", "No gigs yet. Be the first to post.");
@@ -165,6 +180,8 @@
         <p class="meta">${placeTime(g)}</p>
         <p class="meta">${esc(g.public_label)} · <span class="status">${esc(g.status)}</span></p>
         ${g.status === "open" && me && !mine ? `<button class="btn gold" id="btn-accept">${g.cat === "walk" || g.cat === "study" ? "I'll join" : "Accept this job"}</button>` : ""}
+        ${mine && g.status === "open" && !g.featured && g.cat !== "walk" && g.cat !== "study" ? `<div class="reply" style="margin-top:10px"><b>Get more replies</b><br/>Put this post at the top for 7 days.<br/><button class="btn sm gold" style="margin-top:6px" data-buy="feature-7d" data-gig="${g.id}">Feature for R29</button></div>` : ""}
+        ${mine && g.featured ? `<p class="tiny">★ This post is featured${g.featured_until ? " until " + new Date(g.featured_until).toLocaleDateString("en-ZA") : ""}.</p>` : ""}
         ${me ? `<h3 style="margin-top:14px">${mine ? "Messages from students" : "Private chat with the poster"}</h3><div id="threads" class="tiny">Loading...</div>` : ""}
         ${me && me.is_admin ? `<button class="btn danger" style="margin-top:10px" id="btn-remove">Remove post</button>` : ""}
         ${!me ? `<p class="tiny">Log in to accept or reply.</p>` : ""}
@@ -176,6 +193,7 @@
   function renderPost() {
     const free = postCat === "walk" || postCat === "study";
     if (!me) return `${header("Post")}<div class="card"><p>Log in first.</p><button class="btn gold" data-go="login">Log in or join</button></div>`;
+    if (free && me.role === "business") return `${header("Post")}<div class="card"><p>Walk and study posts are for students.</p><button class="btn gold" data-go="gigs">Post a job instead</button></div>`;
     if (!isPaid() && !free) return `${header("Subscribe to post")}<div class="card"><p>Free accounts find work, and can post walk and study requests. Posting paid jobs needs a plan.</p><button class="btn gold" data-go="shop">See plans</button></div>`;
     const cats = free ? [[postCat, CAT_NAMES[postCat]]] : [["chores", "Chores"], ["move", "Moving"], ["bakkie", "Bakkie"], ["assign", "Assignment help"], ["other", "Other"]];
     return `
@@ -204,7 +222,7 @@
   }
   function renderMarket() {
     const live = market.filter(m => m.status === "live"), mine = market.filter(m => m.mine || (me && me.is_admin && m.status === "pending"));
-    const canSell = me && me.plan === "premium";
+    const canSell = me && (me.plan === "premium" || me.plan === "business");
     return `${header("Campus market", "Buy and sell with students")}
       ${mine.filter(m => m.status === "pending").length ? `<p class="tiny">Waiting for admin: ${mine.filter(m => m.status === "pending").map(m => esc(m.title)).join(", ")}</p>` : ""}
       ${live.map(itemCard).join("") || `<p class="list-empty">Nothing for sale yet. Textbooks, kettles, fridges, calculators - sell yours with Campus Pro.</p>`}
@@ -233,7 +251,7 @@
   }
   function renderSell() {
     if (!me) return `${header("Sell")}<div class="card"><p>Log in first.</p><button class="btn gold" data-go="login">Log in or join</button></div>`;
-    if (me.plan !== "premium") return `${header("Sell on the market")}<div class="card"><p>Selling is part of Campus Pro. Buying is always free.</p><button class="btn gold" data-go="shop">See plans</button></div>`;
+    if (me.plan !== "premium" && me.plan !== "business") return `${header("Sell on the market")}<div class="card"><p>Selling is part of Campus Pro. Buying is always free.</p><button class="btn gold" data-go="shop">See plans</button></div>`;
     return `${header("Sell something")}
       <div class="card">
         <div class="field"><label>What are you selling?</label><input id="s-title" maxlength="100" placeholder="e.g. Casio fx-82 calculator" /></div>
@@ -273,6 +291,7 @@
   function renderHelp() {
     if (!me) return `${header("Food bank")}<div class="card"><p>Need a plate? Log in and ask quietly. Only admin sees your name.</p><button class="btn gold" data-go="login">Log in or join</button></div>`;
     return `${header("Food bank", "Private - only admin sees this")}
+      ${settings.sponsor ? `<div class="card" style="background:#FFF6DB"><span class="tag" style="background:#C7A941;color:#1B2642">Plate Fund partner</span><h3 style="margin-top:6px">${esc(settings.sponsor.name)}</h3>${settings.sponsor.line ? `<p class="tiny">${esc(settings.sponsor.line)}</p>` : ""}</div>` : ""}
       <div class="card">
         <h3>Ask for a plate quietly</h3>
         <p class="tiny">No one else sees your request. Admin will contact you.</p>
@@ -291,6 +310,8 @@
       ${paid ? `<p class="tiny">Your plan: <b>${esc(me.plan)}</b>${me.plan_until ? " until " + new Date(me.plan_until).toLocaleDateString("en-ZA") : ""}</p>` : ""}</div>
       <div class="plan"><h3>Poster</h3><div class="amt">R39<span class="tiny"> / month</span></div><ul><li>Post paid jobs</li></ul><button class="btn sm gold" data-buy="poster-1m">Pay R39</button></div>
       <div class="plan hot"><h3>Campus Pro</h3><div class="amt">R79<span class="tiny"> / month</span></div><ul><li>Post paid jobs</li><li>Sell on the campus market</li></ul><button class="btn sm gold" data-buy="pro-1m">Pay R79</button></div>
+      <div class="plan"><h3>Business</h3><div class="amt">R499<span class="tiny"> / month</span></div><ul><li>For shops, landlords and employers</li><li>Your business name on every post</li><li>All your job posts featured at the top</li><li>Sell on the campus market</li></ul><button class="btn sm gold" data-buy="biz-1m">Pay R499</button></div>
+      <p class="tiny">Already posting? Feature one job at the top for 7 days for R29 (open your post and tap Feature).</p>
       <p class="tiny">Payments go through PayFast. Your plan switches on once PayFast confirms the payment.</p>`;
   }
 
@@ -299,11 +320,12 @@
     return `
       ${header("Your card", me.plan)}
       <div class="card">
-        <div class="between"><b>${esc(me.first_name)} ${esc(me.surname)}</b>${verifyBadge()}</div>
+        <div class="between"><b>${esc(me.first_name)} ${esc(me.surname)}</b>${me.role === "business" ? `<span class="tag teal">Business</span>` : verifyBadge()}</div>
+        ${me.business_name ? `<div class="meta">${esc(me.business_name)}</div>` : ""}
         <div class="meta">${[me.course, me.year, me.stay].filter(Boolean).map(esc).join(" · ")}</div>
         <div class="tiny">Plan: ${esc(me.plan)}${me.plan_until ? " until " + new Date(me.plan_until).toLocaleDateString("en-ZA") : ""}</div>
       </div>
-      ${!me.verified && me.verify_status !== "pending" && !me.is_admin ? `<div class="card">
+      ${!me.verified && me.verify_status !== "pending" && !me.is_admin && me.role !== "business" ? `<div class="card">
         <h3>Get verified</h3>
         <p class="tiny">${me.verify_status === "rejected" ? "Your last photos could not be checked. Please send clearer ones." : "Send the front of your student card and a selfie. Only admin sees them."}</p>
         <div class="grid-2">${photoField("v-card", "Student card (front)", "Clear and readable", "environment")}${photoField("v-selfie", "Selfie", "Your face, good light", "user")}</div>
@@ -318,10 +340,15 @@
   function renderAdmin() {
     if (!me || !me.is_admin) return header("Admin") + "<p>Admin only.</p>";
     return `${header("Admin desk")}
+      <div class="card"><h3>Money</h3><div id="admin-stats" class="tiny">Loading...</div></div>
       <div class="card"><h3>Students to verify</h3><div id="admin-verify" class="tiny">Loading...</div></div>
       <div class="card"><h3>Market items to approve</h3><div id="admin-market" class="tiny">Loading...</div></div>
       <div class="card"><h3>Food requests</h3><div id="admin-plates" class="tiny">Loading...</div></div>
-      <div class="card"><h3>Payments</h3><div id="admin-pay" class="tiny">Loading...</div></div>`;
+      <div class="card"><h3>Payments</h3><div id="admin-pay" class="tiny">Loading...</div></div>
+      <div class="card"><h3>Food bank sponsor</h3><p class="tiny">Shown to students on the Food bank screen. Leave the name empty to hide it.</p>
+        <div class="field"><label>Sponsor name</label><input id="sp-name" maxlength="80" value="${esc(settings.sponsor?.name || "")}" /></div>
+        <div class="field"><label>Short line (optional)</label><input id="sp-line" maxlength="140" value="${esc(settings.sponsor?.line || "")}" placeholder="e.g. Feeding UL students every month" /></div>
+        <button class="btn sm gold" id="btn-sponsor">Save sponsor</button></div>`;
   }
 
   function renderTerms() {
@@ -340,6 +367,7 @@
   async function render() {
     if (!me && !PUBLIC.includes(view)) view = "login";
     if (["home", "gigs", "walk", "study", "gig"].includes(view)) await loadGigs();
+    if (view === "help" || view === "admin") { try { settings = await api("/api/settings"); } catch { settings = {}; } }
     if (["market", "item", "admin"].includes(view)) { try { market = await api("/api/market"); } catch { market = []; } }
     showWelcome(false);
     Object.keys(views).forEach(k => {
@@ -361,6 +389,19 @@
     if (view === "item" && me) {
       const m = market.find(x => x.id == selectedItem);
       if (m) loadThreads("market", m.id, m.mine);
+    }
+    if (view === "admin" && $("admin-stats")) {
+      try {
+        const st = await api("/api/admin/stats"), R = (n) => "R" + Math.round(n).toLocaleString("en-ZA");
+        const pct = Math.min(100, (st.monthly_subscriptions / st.goal) * 100);
+        $("admin-stats").innerHTML = `<div class="between"><span>Paid this month</span><b>${R(st.this_month)}</b></div>
+          <div class="between"><span>Last month</span><b>${R(st.last_month)}</b></div>
+          <div class="between"><span>Monthly subscriptions now</span><b>${R(st.monthly_subscriptions)}</b></div>
+          <div style="margin:8px 0 2px">Goal: ${R(st.goal)} a month</div>
+          <div style="background:#EEE;border-radius:8px;height:12px;overflow:hidden"><div style="width:${pct.toFixed(1)}%;min-width:2px;height:100%;background:#C7A941"></div></div>
+          <div style="margin-top:8px">Subscribers: ${st.subs.starter} Poster · ${st.subs.premium} Campus Pro · ${st.subs.business} Business</div>
+          <div>Students: ${st.students} (${st.verified} verified) · Businesses: ${st.businesses}</div>`;
+      } catch (e) { $("admin-stats").textContent = e.message; }
     }
     if (view === "admin" && $("admin-market")) {
       const pend = market.filter(m => m.status === "pending");
@@ -460,6 +501,15 @@
       const r = await api("/api/market", { method: "POST", body: JSON.stringify({ title: $("s-title").value, description: $("s-desc").value, price: Number($("s-price").value), photo }) });
       toast(r.status === "live" ? "Item is live" : "Sent. Admin will approve it soon."); go("market");
     });
+    on("btn-register-biz", async () => {
+      const body = { account_type: "business", email: $("b-email").value, password: $("b-pass").value, first_name: $("b-first").value, surname: $("b-surname").value, business_name: $("b-name").value, phone: $("b-phone").value };
+      await api("/api/auth/register", { method: "POST", body: JSON.stringify(body) });
+      await loadMe(); toast("Business account created"); go("shop");
+    });
+    on("btn-sponsor", async () => {
+      await api("/api/admin/settings", { method: "POST", body: JSON.stringify({ sponsor_name: $("sp-name").value, sponsor_line: $("sp-line").value }) });
+      toast("Saved"); go("admin");
+    });
     on("btn-sold", async () => { await api(`/api/market/${selectedItem}/sold`, { method: "POST" }); toast("Marked as sold"); go("market"); });
     bindMarketAdmin();
     on("btn-remove", async () => { await api(`/api/admin/gigs/${selectedGig}/remove`, { method: "POST" }); toast("Removed"); go("gigs"); });
@@ -467,7 +517,7 @@
     on("btn-logout", async () => { await api("/api/auth/logout", { method: "POST" }); me = null; toast("Logged out"); go("home"); });
     document.querySelectorAll("[data-buy]").forEach(b => b.onclick = act(async () => {
       if (!me) return go("login");
-      const d = await api("/api/payfast/checkout", { method: "POST", body: JSON.stringify({ item: b.getAttribute("data-buy") }) });
+      const d = await api("/api/payfast/checkout", { method: "POST", body: JSON.stringify({ item: b.getAttribute("data-buy"), gig: b.getAttribute("data-gig") }) });
       toast("Opening PayFast...");
       payfastRedirect(d.url, d.params);
     }));
