@@ -23,6 +23,14 @@ Judge every suggestion by this question: **does it bring in money, or bring in t
 3. **A small fee on each job**, once payments can go through the app (later; it needs more legal and PayFast work).
 4. **Grow campus by campus.** Find one student ambassador per campus, on a small commission.
 
+## The owner's non-profit (for sponsorships)
+- Bo-Kgosi Mofenyi Wamathomo Foundation NPC, CIPC reg. 2022/488509/08, registered 16 May 2022, year end December.
+- Plan: open its bank account, register with DSD as an NPO, get SARS PBO + section 18A approval and a tax compliance PIN,
+  then use it to receive CSI sponsorship (for example a student plate fund).
+- Keep the foundation's money separate from Work@Campus (a business). Any payment from the foundation to Work@Campus
+  must be at a fair price and approved by the board, or SARS can withdraw PBO status.
+- Never store directors' ID numbers or home addresses in this repo.
+
 ## Tech facts
 - Node/Express app: `server.js` (API), `store.js` (Neon Postgres or a local file), `public/` (one-page phone app).
 - All data lives in one JSON document (`app_state`). That is fine for thousands of users. Move to proper tables before multi-campus growth.
