@@ -49,3 +49,5 @@ Judge every suggestion by this question: **does it bring in money, or bring in t
 - Node/Express app: `server.js` (API), `store.js` (Neon Postgres or a local file), `public/` (one-page phone app).
 - All data lives in one JSON document (`app_state`). That is fine for thousands of users. Move to proper tables before multi-campus growth.
 - Hosting: Render free plan plus a free Neon database (see DEPLOY.md).
+- Live app: https://workcampus.onrender.com (Render service "WorkCampus", deploys automatically from `main`).
+  Merging to `main` puts changes online within a few minutes.
