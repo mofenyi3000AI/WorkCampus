@@ -5,7 +5,7 @@
 const fs = require("fs");
 const path = require("path");
 
-const EMPTY = () => ({ users: [], gigs: [], replies: [], market: [], plates: [], payments: [], nextId: 1 });
+const EMPTY = () => ({ users: [], gigs: [], replies: [], market: [], plates: [], payments: [], settings: {}, nextId: 1 });
 const DIR = path.join(__dirname, "data");
 const FILE = path.join(DIR, "db.json");
 const IMG_DIR = path.join(DIR, "images");

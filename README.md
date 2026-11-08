@@ -20,6 +20,11 @@ University of Limpopo student app: paid gigs, walking buddies, study partners, a
 - **Students can now talk both ways.** Before, a student could message a job poster, but the poster could not reply. So no job could actually be arranged. Now each post has a private chat with each student, and accepting a job opens the chat automatically.
 - **The market now exists.** Campus Pro (R79) was sold as "sell on the campus market", but there was no market screen. There is now a Market screen (on the Home page) where Campus Pro members can sell, any student can buy and message the seller, and admin approves each item.
 
+- **Business plan (R499 a month).** Shops, landlords and employers can sign up without a student number. Their posts show their business name and sit at the top of the jobs list.
+- **Featured posts (R29 for 7 days).** Anyone can pay to move their job post to the top.
+- **Money card on the Admin desk.** Shows what came in this month, monthly subscriptions, and progress towards R300,000 a month.
+- **Food bank sponsor.** Admin can name a "Plate Fund partner" that students see on the Food bank screen. This is what you offer to sponsors.
+
 ## Run on a laptop
 ```bash
 npm install
