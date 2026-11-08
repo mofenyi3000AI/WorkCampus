@@ -21,7 +21,11 @@ Judge every suggestion by this question: **does it bring in money, or bring in t
 - The owner does NOT want a separate company or a separate PayFast account (too much admin and cost).
   Work@Campus uses the BEE Group PayFast account. That account has never received a payment, so setting a
   passphrase on it is low-risk; the beegroup.co.za shop's PayFast plugin must get the same passphrase on the same day.
-- Team: the owner plus **Puleng** (office admin, made admin on the Admin desk). More students later if work grows.
+- Team: the owner plus a paid **office admin** (a student on a monthly retainer, with a laptop). Never write staff names
+  in this repo or the guides; say "office admin", because the person may change.
+- The owner also does admin work and logs in with the owner account (ADMIN_EMAIL / ADMIN_PASSWORD in Render).
+- Only the owner can add admins and ambassadors, add campuses and record ambassador payouts. Office admins can't.
+- OFFICE-ADMIN-GUIDE.md is the step-by-step guide for the office admin. Keep it up to date when screens change.
 - The owner will pay for Render Starter (about R130/month) once the first customer pays.
 - The plan is many universities, not just UL. Campuses are added on the Admin desk; each gets a short link (/ul, /univen).
 - Student calendar matters: exams and closing in late November/December; the big chance is the January registration rush.

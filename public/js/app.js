@@ -109,6 +109,7 @@
       <div class="card">
         <h3>Join free</h3>
         <p class="tiny">Your name and student number stay with admin only. Others see "Verified student".</p>
+        <p class="tiny">Forgot your password? Message Work@Campus admin from the email you joined with.</p>
         <div class="grid-2">
           <div class="field"><label>Name</label><input id="r-first" /></div>
           <div class="field"><label>Surname</label><input id="r-surname" /></div>
@@ -372,6 +373,10 @@
       <button class="btn ghost" style="margin-top:8px" id="btn-share">Invite friends to Work@Campus</button>
       <button class="btn ghost" style="margin-top:8px" data-go="terms">House rules</button>
       ${me.is_admin ? `<button class="btn ghost" style="margin-top:8px" data-go="admin">Admin desk</button>` : ""}
+      <details style="margin-top:8px"><summary class="tiny">Change my password</summary><div class="card" style="margin-top:8px">
+        <div class="field"><label>Current password</label><input id="pw-old" type="password" autocomplete="current-password" /></div>
+        <div class="field"><label>New password (6+ characters)</label><input id="pw-new" type="password" autocomplete="new-password" /></div>
+        <button class="btn sm gold" id="btn-pw">Change password</button></div></details>
       <button class="btn ghost" style="margin-top:8px" data-go="privacy">Privacy policy</button>
       <button class="btn ghost" style="margin-top:8px" id="btn-logout">Log out</button>
       ${me.is_admin ? "" : `<details style="margin-top:18px"><summary class="tiny">Delete my account</summary>
@@ -383,28 +388,31 @@
   function renderAdmin() {
     if (!me || !me.is_admin) return header("Admin") + "<p>Admin only.</p>";
     return `${header("Admin desk")}
-      <div class="card"><h3>Money</h3><div id="admin-stats" class="tiny">Loading...</div></div>
+      ${me.owner ? `<div class="card"><h3>Money</h3><div id="admin-stats" class="tiny">Loading...</div></div>` : ""}
       <div class="card"><h3>Students to verify</h3><div id="admin-verify" class="tiny">Loading...</div></div>
       <div class="card"><h3>Market items to approve</h3><div id="admin-market" class="tiny">Loading...</div></div>
       <div class="card"><h3>Food requests</h3><div id="admin-plates" class="tiny">Loading...</div></div>
+      <div class="card"><h3>Forgot password</h3><p class="tiny">A member forgot their password? Type their email. You get a temporary password to send them. They can change it under Me.</p>
+        <div class="field"><label>Their email</label><input id="rp-email" type="email" /></div>
+        <button class="btn sm gold" id="btn-reset">Make temporary password</button><div id="rp-out" class="tiny" style="margin-top:8px"></div></div>
       <div class="card"><h3>Payments</h3><div id="admin-pay" class="tiny">Loading...</div></div>
       <div class="card"><h3>Links to share</h3><p class="tiny">Post these in WhatsApp and Facebook groups. Each opens the app for that campus with a picture preview.</p>
         ${campuses.map(c => `<div class="reply" style="word-break:break-all"><b>${esc(c.short)}</b>: ${esc(location.origin + "/" + c.slug)}</div>`).join("")}</div>
-      <div class="card"><h3>Team</h3><p class="tiny">Make someone an admin (e.g. office admin) or an ambassador. They must join the app first.</p>
+      ${me.owner ? `<div class="card"><h3>Team</h3><p class="tiny">Make someone an admin (e.g. office admin) or an ambassador. They must join the app first.</p>
         <div id="admin-team" class="tiny">Loading...</div>
         <div class="field"><label>Their email</label><input id="tm-email" type="email" /></div>
         <div class="field"><label>Make them</label><select id="tm-role"><option value="ambassador">Ambassador (earns ${20}% commission)</option><option value="admin">Admin (full Admin desk access)</option><option value="remove-ambassador">Remove ambassador</option><option value="remove-admin">Remove admin</option></select></div>
-        <button class="btn sm gold" id="btn-team">Save</button></div>
-      <div class="card"><h3>Campuses</h3><div id="admin-campuses" class="tiny">${campuses.map(c => esc(c.name) + " (/" + esc(c.slug) + ")").join("<br/>")}</div>
+        <button class="btn sm gold" id="btn-team">Save</button></div>` : ""}
+      ${me.owner ? `<div class="card"><h3>Campuses</h3><div id="admin-campuses" class="tiny">${campuses.map(c => esc(c.name) + " (/" + esc(c.slug) + ")").join("<br/>")}</div>
         <div class="grid-2"><div class="field"><label>Short link name</label><input id="cp-slug" maxlength="12" placeholder="univen" /></div><div class="field"><label>Short name</label><input id="cp-short" maxlength="12" placeholder="Univen" /></div></div>
         <div class="field"><label>Full name</label><input id="cp-name" maxlength="80" placeholder="University of Venda" /></div>
-        <button class="btn sm gold" id="btn-campus">Add campus</button></div>
-      <div class="card"><h3>Promo codes</h3><p class="tiny">A discount on the first payment only. Example: LAUNCH50 = 50% off the first month.</p>
+        <button class="btn sm gold" id="btn-campus">Add campus</button></div>` : ""}
+      ${me.owner ? `<div class="card"><h3>Promo codes</h3><p class="tiny">A discount on the first payment only. Example: LAUNCH50 = 50% off the first month.</p>
         <div id="admin-promos" class="tiny">Loading...</div>
         <div class="grid-2"><div class="field"><label>Code</label><input id="pr-code" maxlength="20" placeholder="LAUNCH50" /></div><div class="field"><label>% off</label><input id="pr-pct" type="number" min="1" max="90" value="50" /></div></div>
         <div class="grid-2"><div class="field"><label>Max uses (0 = no limit)</label><input id="pr-max" type="number" min="0" value="0" /></div>
         <div class="field"><label>For</label><select id="pr-plan"><option value="">All plans</option><option value="biz-1m">Business only</option><option value="pro-1m">Campus Pro only</option><option value="poster-1m">Poster only</option></select></div></div>
-        <button class="btn sm gold" id="btn-promo">Create code</button></div>
+        <button class="btn sm gold" id="btn-promo">Create code</button></div>` : ""}
       <div class="card"><h3>Food bank sponsor</h3><p class="tiny">Shown to students on the Food bank screen. Leave the name empty to hide it.</p>
         <div class="field"><label>Sponsor name</label><input id="sp-name" maxlength="80" value="${esc(settings.sponsor?.name || "")}" /></div>
         <div class="field"><label>Short line (optional)</label><input id="sp-line" maxlength="140" value="${esc(settings.sponsor?.line || "")}" placeholder="e.g. Feeding UL students every month" /></div>
@@ -481,7 +489,7 @@
         const t = await api("/api/admin/team");
         $("admin-team").innerHTML = t.map(u => `<div class="reply"><b>${esc(u.name)}</b> · ${esc(u.email)}${u.owner ? " · owner" : ""}${u.admin ? " · admin" : ""}
           ${u.ambassador ? `<br/>Ambassador ${esc(u.ambassador.code)} · invited ${esc(u.ambassador.invited)} · paying ${esc(u.ambassador.paying)} · earned R${esc(u.ambassador.earned)} · <b>owed R${esc(u.ambassador.owed)}</b>
-          ${u.ambassador.owed > 0 ? `<br/><button class="btn sm teal" data-payout="${u.id}">I paid R${esc(u.ambassador.owed)}</button>` : ""}` : ""}</div>`).join("") || "Just you so far.";
+          ${u.ambassador.owed > 0 && me.owner ? `<br/><button class="btn sm teal" data-payout="${u.id}">I paid R${esc(u.ambassador.owed)}</button>` : ""}` : ""}</div>`).join("") || "Just you so far.";
         document.querySelectorAll("[data-payout]").forEach(b => b.onclick = act(async () => {
           if (!confirm("Did you pay this amount to the ambassador (e.g. by EFT)?")) return;
           await api(`/api/admin/team/${b.dataset.payout}/paid`, { method: "POST" }); toast("Recorded"); go("admin");
@@ -511,7 +519,7 @@
     if (view === "admin" && $("admin-plates")) {
       try {
         const plates = await api("/api/admin/plates");
-        $("admin-plates").innerHTML = plates.map(p => `<div class="admin-secret" style="margin-bottom:8px">${esc(p.first_name)} ${esc(p.surname)} · ${esc(p.student_number)}<br/>${esc(p.need)}<br/>${esc(p.note)}<br/>Status: ${esc(p.status)} ${p.status === "open" ? `<button class="btn sm gold" data-plate-done="${p.id}">Mark helped</button>` : ""}</div>`).join("") || "None";
+        $("admin-plates").innerHTML = plates.map(p => `<div class="admin-secret" style="margin-bottom:8px">${esc(p.first_name)} ${esc(p.surname)} · ${esc(p.student_number)}<br/>${esc(p.email)}${p.phone ? " · " + esc(p.phone) : ""}<br/>${esc(p.need)}<br/>${esc(p.note)}<br/>Status: ${esc(p.status)} ${p.status === "open" ? `<button class="btn sm gold" data-plate-done="${p.id}">Mark helped</button>` : ""}</div>`).join("") || "None";
         const vs = await api("/api/admin/verify");
         $("admin-verify").innerHTML = vs.map(v => `<div class="reply"><b>${esc(v.name)}</b> · ${esc(v.student_number)} · ${esc(v.course)} ${esc(v.year)}
           <div class="grid-2" style="margin:8px 0"><a href="/api/img/${esc(v.card_img)}" target="_blank"><img src="/api/img/${esc(v.card_img)}" style="width:100%;border-radius:10px" alt="card"/></a><a href="/api/img/${esc(v.selfie_img)}" target="_blank"><img src="/api/img/${esc(v.selfie_img)}" style="width:100%;border-radius:10px" alt="selfie"/></a></div>
@@ -597,6 +605,14 @@
       const body = { account_type: "business", email: $("b-email").value, password: $("b-pass").value, first_name: $("b-first").value, surname: $("b-surname").value, business_name: $("b-name").value, phone: $("b-phone").value, campus: $("b-campus").value };
       await api("/api/auth/register", { method: "POST", body: JSON.stringify(body) });
       await loadMe(); toast("Business account created"); go("shop");
+    });
+    on("btn-reset", async () => {
+      const r = await api("/api/admin/reset-password", { method: "POST", body: JSON.stringify({ email: $("rp-email").value.trim() }) });
+      $("rp-out").innerHTML = `Temporary password for <b>${esc(r.name)}</b>: <b style="font-size:16px">${esc(r.temp)}</b><br/>Send it to them privately. Tell them to change it under Me.`;
+    });
+    on("btn-pw", async () => {
+      await api("/api/me/password", { method: "POST", body: JSON.stringify({ old: $("pw-old").value, password: $("pw-new").value }) });
+      toast("Password changed"); go("me");
     });
     on("btn-team", async () => {
       await api("/api/admin/team", { method: "POST", body: JSON.stringify({ email: $("tm-email").value.trim(), role: $("tm-role").value }) });
