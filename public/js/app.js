@@ -349,6 +349,7 @@
       <div class="plan"><h3>Poster</h3><div class="amt">R39<span class="tiny"> / month</span></div><ul><li>Post paid jobs</li></ul><button class="btn sm gold" data-buy="poster-1m">Pay R39</button></div>
       <div class="plan hot"><h3>Campus Pro</h3><div class="amt">R79<span class="tiny"> / month</span></div><ul><li>Post paid jobs</li><li>Sell on the campus market</li></ul><button class="btn sm gold" data-buy="pro-1m">Pay R79</button></div>
       <div class="plan"><h3>Business</h3><div class="amt">R499<span class="tiny"> / month</span></div><ul><li>For shops, landlords and employers</li><li>Your business name on every post</li><li>All your job posts featured at the top</li><li>Sell on the campus market</li></ul><button class="btn sm gold" data-buy="biz-1m">Pay R499</button></div>
+      ${(me && me.is_admin) || /[?&]test=1/.test(location.search) ? `<div class="plan"><h3>Test payment</h3><div class="amt">R10<span class="tiny"> once</span></div><ul><li>Checks that PayFast works</li><li>Gives no plan</li></ul><button class="btn sm gold" data-buy="test-10">Pay R10</button></div>` : ""}
       <p class="tiny">Already posting? Feature one job at the top for 7 days for R29 (open your post and tap Feature).</p>
       <p class="tiny">Payments go through PayFast. Your plan switches on once PayFast confirms the payment.</p>`;
   }

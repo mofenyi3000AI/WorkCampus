@@ -38,7 +38,9 @@ const PLANS = {
   // For shops, landlords and employers who want to reach students. Includes featured posts.
   "biz-1m": { amount: 499, months: 1, plan: "business", name: "Work@Campus Business - 1 month" },
   // One-off: put one of your job posts at the top of the list for 7 days.
-  "feature-7d": { amount: 29, days: 7, feature: true, name: "Work@Campus Featured post - 7 days" }
+  "feature-7d": { amount: 29, days: 7, feature: true, name: "Work@Campus Featured post - 7 days" },
+  // Owner's R10 test: proves PayFast works end to end. Gives no plan. Shown to admins, or anyone who opens /?test=1
+  "test-10": { amount: 10, test: true, name: "Work@Campus Test payment" }
 };
 const SELLER_PLANS = ["premium", "business"];
 const GOAL = 300000;
@@ -433,7 +435,7 @@ app.post("/api/payfast/checkout", auth, (req, res) => {
   if (!PF_MERCHANT_ID || !PF_MERCHANT_KEY) return res.status(503).json({ error: "Payments are not switched on yet" });
   // Promo code: discount on the first payment only.
   let amount = plan.amount, code = null;
-  if (req.body.code) {
+  if (req.body.code && !plan.test) {
     const p = findPromo(req.body.code);
     if (!p) return res.status(400).json({ error: "That code is not valid" });
     if (p.plans?.length && !p.plans.includes(key)) return res.status(400).json({ error: "That code is not for this plan" });
@@ -505,6 +507,11 @@ async function applyPayment(data) {
   if (checkout && !renewal) {
     checkout.used = true;
     if (checkout.code) { const p = findPromo(checkout.code, true); if (p) p.uses = (p.uses || 0) + 1; }
+  }
+  if (plan.test) { // R10 test: record it, switch nothing on, no ambassador commission
+    db.payments.push({ id: nid(), user_id: user.id, pf_payment_id: data.pf_payment_id, ref, amount: expected, item: m[2], test: true, status: "COMPLETE", created_at: now() });
+    await save();
+    return console.log(`PayFast: TEST R${expected} payment from user ${user.id} worked`);
   }
   if (data.token && plan.months) { user.sub_token = data.token; user.sub_status = "active"; user.sub_item = m[2]; }
   if (plan.feature) {
