@@ -39,8 +39,8 @@ const PLANS = {
   "biz-1m": { amount: 499, months: 1, plan: "business", name: "Work@Campus Business - 1 month" },
   // One-off: put one of your job posts at the top of the list for 7 days.
   "feature-7d": { amount: 29, days: 7, feature: true, name: "Work@Campus Featured post - 7 days" },
-  // Owner's R10 test: proves PayFast works end to end. Gives no plan. Shown to admins, or anyone who opens /?test=1
-  "test-10": { amount: 10, test: true, name: "Work@Campus Test payment" }
+  // Owner's R15 test: proves PayFast works end to end. Gives no plan. Shown to admins, or anyone who opens /?test=1
+  "test-10": { amount: 15, test: true, name: "Work@Campus Test payment" }
 };
 const SELLER_PLANS = ["premium", "business"];
 const GOAL = 300000;
@@ -508,7 +508,7 @@ async function applyPayment(data) {
     checkout.used = true;
     if (checkout.code) { const p = findPromo(checkout.code, true); if (p) p.uses = (p.uses || 0) + 1; }
   }
-  if (plan.test) { // R10 test: record it, switch nothing on, no ambassador commission
+  if (plan.test) { // R15 test: record it, switch nothing on, no ambassador commission
     db.payments.push({ id: nid(), user_id: user.id, pf_payment_id: data.pf_payment_id, ref, amount: expected, item: m[2], test: true, status: "COMPLETE", created_at: now() });
     await save();
     return console.log(`PayFast: TEST R${expected} payment from user ${user.id} worked`);
